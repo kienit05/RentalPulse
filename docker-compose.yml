@@ -1,0 +1,158 @@
+# ============================================================
+# KHỐI DÙNG CHUNG CHO AIRFLOW
+# "x-" ở đầu nghĩa là khối tự đặt, Compose không coi là service.
+# "&airflow-common" là một "nhãn" để tái sử dụng bên dưới (tránh viết lặp).
+# ============================================================
+x-airflow-common: &airflow-common
+  image: apache/airflow:2.10.5
+  environment:
+    # Airflow chạy nhiều tiến trình song song trên cùng máy
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    # Chuỗi kết nối tới database riêng của Airflow (tên service: airflow-db)
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-db/airflow
+    # Không nạp các DAG ví dụ có sẵn, cho giao diện đỡ rối
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    # Khóa bí mật cho web (môi trường học nên đặt tạm)
+    AIRFLOW__WEBSERVER__SECRET_KEY: "rentalpulse-dev-secret"
+  volumes:
+    # Thư mục trên máy bạn : thư mục trong container
+    # Bạn viết DAG ở ./airflow/dags, Airflow trong container sẽ thấy ngay
+    - ./airflow/dags:/opt/airflow/dags
+    - ./airflow/logs:/opt/airflow/logs
+    - ./dbt:/opt/airflow/dbt
+  depends_on:
+    airflow-db:
+      condition: service_healthy   # đợi airflow-db khỏe mạnh mới chạy
+
+# ============================================================
+# CÁC SERVICE
+# ============================================================
+services:
+
+  # ---------- 1. POSTGRESQL: kho dữ liệu đã xử lý ----------
+  postgres:
+    image: postgres:16
+    container_name: rental-postgres          # tên container cho dễ nhìn
+    environment:
+      # ${...} sẽ được thay bằng giá trị trong file .env
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5432:5432"                          # máy bạn:container
+    volumes:
+      - pg_data:/var/lib/postgresql/data     # lưu dữ liệu bền vững
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s                           # cứ 5 giây kiểm tra 1 lần
+      retries: 10                            # thử tối đa 10 lần
+
+  # ---------- 2. MINIO: kho dữ liệu thô (Bronze) ----------
+  minio:
+    image: minio/minio:latest
+    container_name: rental-minio
+    command: server /data --console-address ":9001"
+    # server /data  : chạy MinIO, lưu file vào thư mục /data
+    # --console-address ":9001" : giao diện web chạy ở cổng 9001
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports:
+      - "9000:9000"                          # cổng API (Python dùng)
+      - "9001:9001"                          # cổng giao diện web (bạn mở trình duyệt)
+    volumes:
+      - minio_data:/data
+
+  # ---------- 3. KAFKA: hệ thống truyền sự kiện ----------
+  kafka:
+    image: apache/kafka:3.9.0
+    container_name: rental-kafka
+    ports:
+      - "29092:29092"                        # cổng cho Python trên máy bạn
+    environment:
+      KAFKA_NODE_ID: 1                       # số định danh của node này
+      KAFKA_PROCESS_ROLES: broker,controller # node này đảm nhận cả 2 vai trò
+      # Kafka lắng nghe ở 3 cổng trong container:
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:29092
+      # Kafka "tự giới thiệu" địa chỉ cho client:
+      #   - container khác gọi kafka:9092
+      #   - máy bạn gọi localhost:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      # Chỉ có 1 broker nên số bản sao = 1
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+
+  # ---------- 4. KAFKA UI: giao diện xem Kafka (không bắt buộc nhưng rất hữu ích) ----------
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: rental-kafka-ui
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092   # trong Docker nên dùng kafka:9092
+    depends_on:
+      - kafka
+
+  # ---------- 5. AIRFLOW ----------
+  # Database riêng chỉ để Airflow lưu lịch sử chạy của nó
+  airflow-db:
+    image: postgres:16
+    container_name: rental-airflow-db
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - airflow_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow"]
+      interval: 5s
+      retries: 10
+
+  # Chạy 1 lần để tạo cấu trúc database và tài khoản admin, rồi tự dừng
+  airflow-init:
+    <<: *airflow-common                      # "nhúng" toàn bộ khối dùng chung ở trên
+    container_name: rental-airflow-init
+    entrypoint: /bin/bash
+    command: >
+      -c "airflow db migrate &&
+      airflow users create --username admin --password admin
+      --firstname Admin --lastname User --role Admin --email admin@example.com"
+
+  # Giao diện web của Airflow
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: rental-airflow-web
+    command: webserver
+    ports:
+      - "8081:8080"        # cổng 8081 trên máy bạn (vì 8080 đã dành cho Kafka UI)
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully   # đợi init chạy xong thành công
+
+  # Bộ lập lịch: người thực sự "bấm giờ" chạy các DAG
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: rental-airflow-scheduler
+    command: scheduler
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+
+# ============================================================
+# KHAI BÁO CÁC VOLUME (ổ đĩa lưu dữ liệu bền vững)
+# ============================================================
+volumes:
+  pg_data:
+  minio_data:
+  kafka_data:
+  airflow_db_data:
