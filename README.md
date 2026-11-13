@@ -10,3 +10,6 @@ Python, Kafka, RustFS (S3-compatible), PostgreSQL, Airflow, dbt, Power BI, Docke
 2. `docker compose up -d postgres rustfs kafka`
 3. `python -m venv .venv`, kích hoạt rồi `pip install -r requirements.txt`
 4. `python scripts/check_env.py`
+
+## GUI RustFS
+![alt text](image.png)
