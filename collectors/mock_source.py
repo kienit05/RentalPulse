@@ -1,5 +1,6 @@
 """Nguồn dữ liệu giả lập: tạo tin đăng thuê nhà trông giống thật, có cả dữ liệu bẩn."""
 import random
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 # Quận -> danh sách đường (dữ liệu mẫu để ghép thành địa chỉ)
@@ -19,6 +20,17 @@ PROPERTY_TYPES = {
     "Nhà nguyên căn": (50, 120, 150_000, 250_000),
 }
 
+@dataclass
+class Listing:
+    """Trạng thái THẬT của một tin đăng."""
+    listing_id: str
+    ptype: str
+    area: int
+    price: int | None   # None nghĩa là "Thỏa thuận"
+    district: str
+    street: str
+    house_no: int
+    active: bool = True  # True = website đang hiển thị tin này
 
 def format_price(price_vnd, rng):
     """Viết giá theo nhiều kiểu khác nhau, giống người đăng tin thật."""
