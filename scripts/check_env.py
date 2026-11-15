@@ -20,16 +20,32 @@ def check_postgres():
 
 
 def check_object_storage():
-    from minio import Minio
-    client = Minio(
-        os.getenv("MINIO_ENDPOINT"),
-        access_key=os.getenv("MINIO_ROOT_USER"),
-        secret_key=os.getenv("MINIO_ROOT_PASSWORD"),
-        secure=False,
+    import boto3
+    from botocore.config import Config
+    from botocore.exceptions import ClientError
+
+    client = boto3.client(
+        "s3",
+        endpoint_url="http://" + os.getenv("RUSTFS_ENDPOINT"),
+        aws_access_key_id=os.getenv("RUSTFS_ACCESS_KEY"),
+        aws_secret_access_key=os.getenv("RUSTFS_SECRET_KEY"),
+        region_name="us-east-1",
+        config=Config(
+            signature_version="s3v4",
+            s3={"addressing_style": "path"},
+            connect_timeout=3,
+            read_timeout=15,
+            retries={"max_attempts": 2, "mode": "standard"},
+        ),
     )
-    bucket = os.getenv("MINIO_BUCKET")
-    if not client.bucket_exists(bucket):
-        client.make_bucket(bucket)
+    bucket = os.getenv("RUSTFS_BUCKET")
+    try:
+        client.head_bucket(Bucket=bucket)
+    except ClientError as e:
+        if e.response["Error"]["Code"] in ("404", "NoSuchBucket"):
+            client.create_bucket(Bucket=bucket)
+        else:
+            raise
     print("Object storage OK: bucket", bucket)
 
 

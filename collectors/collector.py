@@ -1,16 +1,17 @@
 """Collector: lấy dữ liệu từ nguồn (mock) rồi lưu bản gốc vào RustFS (tầng Bronze)."""
-import io
 import json
 import logging
 import os
 import time
 from datetime import datetime
-import urllib3
 
 from dotenv import load_dotenv
-from minio import Minio
 
 from mock_source import generate_batch
+
+import boto3
+from botocore.config import Config
+from botocore.exceptions import ClientError
 
 load_dotenv()
 
@@ -26,16 +27,19 @@ WAIT_SECONDS = 2    # lần 1 thất bại đợi 2s, lần 2 đợi 4s
 
 def get_client():
     """Tạo kết nối tới kho lưu file (RustFS) bằng thông tin trong .env."""
-    http = urllib3.PoolManager(
-        timeout=urllib3.Timeout(connect=3, read=15),  # chờ nối tối đa 3 giây
-        retries=urllib3.Retry(total=1),               # thư viện chỉ thử lại 1 lần
-    )
-    return Minio(
-        os.getenv("MINIO_ENDPOINT"),
-        access_key=os.getenv("MINIO_ROOT_USER"),
-        secret_key=os.getenv("MINIO_ROOT_PASSWORD"),
-        secure=False,
-        http_client=http,
+    return boto3.client(
+        "s3",
+        endpoint_url="http://" + os.getenv("RUSTFS_ENDPOINT"),
+        aws_access_key_id=os.getenv("RUSTFS_ACCESS_KEY"),
+        aws_secret_access_key=os.getenv("RUSTFS_SECRET_KEY"),
+        region_name="us-east-1",
+        config=Config(
+            signature_version="s3v4",
+            s3={"addressing_style": "path"},
+            connect_timeout=3,
+            read_timeout=15,
+            retries={"max_attempts": 2, "mode": "standard"},
+        ),
     )
 
 
@@ -53,9 +57,14 @@ def with_retry(func, *args, **kwargs):
 
 def save_to_bronze(client, records, source="mock"):
     """Lưu một đợt tin đăng thành 1 file JSON, trả về đường dẫn file."""
-    bucket = os.getenv("MINIO_BUCKET")
-    if not client.bucket_exists(bucket):
-        client.make_bucket(bucket)
+    bucket = os.getenv("RUSTFS_BUCKET")
+    try:
+        client.head_bucket(Bucket=bucket)
+    except ClientError as e:
+        if e.response["Error"]["Code"] in ("404", "NoSuchBucket"):
+            client.create_bucket(Bucket=bucket)
+        else:
+            raise
 
     now = datetime.now()
     payload = {
@@ -68,11 +77,10 @@ def save_to_bronze(client, records, source="mock"):
 
     object_name = f"{source}/dt={now:%Y-%m-%d}/listings_{now:%H%M%S}.json"
     client.put_object(
-        bucket,
-        object_name,
-        io.BytesIO(data),
-        length=len(data),
-        content_type="application/json",
+        Bucket=bucket,
+        Key=object_name,
+        Body=data,
+        ContentType="application/json",
     )
     return object_name
 
@@ -86,7 +94,7 @@ def main():
 
         client = get_client()
         path = with_retry(save_to_bronze, client, records)
-        log.info("Đã lưu %d tin vào %s/%s", len(records), os.getenv("MINIO_BUCKET"), path)
+        log.info("Đã lưu %d tin vào %s/%s", len(records), os.getenv("RUSTFS_BUCKET"), path)
     except Exception:
         log.exception("Collector thất bại")
         raise SystemExit(1)  # mã thoát 1 = có lỗi

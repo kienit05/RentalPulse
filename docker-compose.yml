@@ -40,8 +40,8 @@ services:
     image: rustfs/rustfs:1.0.0
     container_name: rental-rustfs
     environment:
-      RUSTFS_ACCESS_KEY: ${MINIO_ROOT_USER}
-      RUSTFS_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY}
       RUSTFS_CONSOLE_ENABLE: "true"
     ports:
       - "9000:9000"   # cổng API (Python dùng)

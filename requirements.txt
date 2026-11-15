@@ -1,8 +1,8 @@
 confluent-kafka
-minio
 psycopg2-binary
 SQLAlchemy
 pandas
 requests
 python-dotenv
 dbt-postgres
+boto3
