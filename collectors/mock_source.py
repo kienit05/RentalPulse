@@ -3,9 +3,12 @@ import random
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-P_NO_PRICE = 0.05 
-
+P_PRICE_CHANGE = 0.06  # xác suất mỗi ngày một tin đang hiển thị đổi giá
+P_NO_PRICE = 0.05  # xác suất một tin ghi "Thỏa thuận" (chưa có giá)
 NEW_PER_DAY = (2, 6)  # mỗi ngày (từ ngày 2) có từ 2 đến 6 tin mới
+P_REMOVE = 0.04   # xác suất mỗi ngày một tin đang hiển thị bị gỡ
+P_REPOST = 0.30   # trong số tin bị gỡ, xác suất được đăng lại bằng mã mới
+P_RETURN = 0.15   # xác suất mỗi ngày một tin đã gỡ (chưa đăng lại) xuất hiện lại
 
 # Quận -> danh sách đường (dữ liệu mẫu để ghép thành địa chỉ)
 DISTRICTS = {
@@ -36,6 +39,9 @@ class Listing:
     house_no: int
     created_day: int     # ngày (1, 2, 3...) tin xuất hiện lần đầu
     active: bool = True  # True = website đang hiển thị tin này
+    scripted: bool = False  # True = tin kịch bản, chỉ đổi theo kịch bản
+    is_repost: bool = False  # True = bản đăng lại của một tin khác
+    reposted: bool = False   # True = tin này đã có bản đăng lại, sẽ không quay lại nữa
 
 def random_listing(rng, listing_id, created_day):
     """Tạo MỘT tin đăng ngẫu nhiên, dưới dạng trạng thái THẬT (sạch)."""
@@ -57,6 +63,12 @@ def random_listing(rng, listing_id, created_day):
         house_no=rng.randint(1, 200),
         created_day=created_day,
     )
+
+def new_price(price, rng):
+    """Đổi giá ngẫu nhiên khoảng 5% đến 10%, làm tròn đến trăm nghìn."""
+    factor = rng.choice([-0.10, -0.05, 0.05, 0.10])
+    new = int(round(price * (1 + factor), -5))
+    return new if new != price else price + 100_000
 
 # Kịch bản cố định: "số phận" của từng tin theo ngày.
 # events có dạng {ngày: [(hành động, giá trị), ...]}
@@ -83,7 +95,7 @@ def apply_scenarios(listings, day):
     for sc in SCENARIOS:
         sid = sc["id"]
         if day == sc.get("start_day", 1):
-            listings[sid] = Listing(listing_id=sid, created_day=day, **sc["base"])
+            listings[sid] = Listing(listing_id=sid, created_day=day, scripted=True, **sc["base"])
         listing = listings.get(sid)
         if listing is None:
             continue
@@ -107,6 +119,31 @@ def simulate(day, seed=42, n_initial=30):
     for d in range(1, day + 1):
         apply_scenarios(listings, d)
 
+        # 1) Biến động của các tin đã có (từ ngày 2)
+        if d > 1:
+            for listing in list(listings.values()):
+                if listing.scripted:
+                    continue
+                if listing.active:
+                    r = rng.random()
+                    if r < P_REMOVE:
+                        listing.active = False
+                        if rng.random() < P_REPOST:
+                            listing.reposted = True
+                            counter += 1
+                            new_id = f"RP-{counter:06d}"
+                            listings[new_id] = Listing(
+                                listing_id=new_id, ptype=listing.ptype, area=listing.area,
+                                price=listing.price, district=listing.district,
+                                street=listing.street, house_no=listing.house_no,
+                                created_day=d, is_repost=True,
+                            )
+                    elif r < P_REMOVE + P_PRICE_CHANGE and listing.price is not None:
+                        listing.price = new_price(listing.price, rng)
+                elif not listing.reposted and rng.random() < P_RETURN:
+                    listing.active = True
+
+        # 2) Tin mới
         n_new = n_initial if d == 1 else rng.randint(*NEW_PER_DAY)
         for _ in range(n_new):
             counter += 1
