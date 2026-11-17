@@ -56,6 +56,43 @@ def random_listing(rng, listing_id, created_day):
         created_day=created_day,
     )
 
+# Kịch bản cố định: "số phận" của từng tin theo ngày.
+# events có dạng {ngày: [(hành động, giá trị), ...]}
+SCENARIOS = [
+    {
+        "id": "RP-S001",
+        "note": "Tin A: giá tăng, biến mất, xuất hiện lại",
+        "base": dict(ptype="Phòng trọ", area=25, price=3_500_000,
+                     district="Cầu Giấy", street="Trần Thái Tông", house_no=12),
+        "events": {
+            2: [("set_price", 4_000_000)],
+            3: [("remove", None)],
+            4: [("return", None)],
+        },
+    },
+]
+
+
+def apply_scenarios(listings, day):
+    """Đưa các tin kịch bản về đúng trạng thái của ngày `day`.
+
+    listings là từ điển {listing_id: Listing}, được cập nhật tại chỗ.
+    """
+    for sc in SCENARIOS:
+        sid = sc["id"]
+        if day == sc.get("start_day", 1):
+            listings[sid] = Listing(listing_id=sid, created_day=day, **sc["base"])
+        listing = listings.get(sid)
+        if listing is None:
+            continue
+        for action, value in sc["events"].get(day, []):
+            if action == "set_price":
+                listing.price = value
+            elif action == "remove":
+                listing.active = False
+            elif action == "return":
+                listing.active = True
+
 def format_price(price_vnd, rng):
     """Viết giá theo nhiều kiểu khác nhau, giống người đăng tin thật."""
     millions = price_vnd / 1_000_000
