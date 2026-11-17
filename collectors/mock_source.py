@@ -5,6 +5,8 @@ from datetime import datetime, timedelta
 
 P_NO_PRICE = 0.05 
 
+NEW_PER_DAY = (2, 6)  # mỗi ngày (từ ngày 2) có từ 2 đến 6 tin mới
+
 # Quận -> danh sách đường (dữ liệu mẫu để ghép thành địa chỉ)
 DISTRICTS = {
     "Cầu Giấy": ["Trần Thái Tông", "Dịch Vọng Hậu", "Nguyễn Khang"],
@@ -105,11 +107,11 @@ def simulate(day, seed=42, n_initial=30):
     for d in range(1, day + 1):
         apply_scenarios(listings, d)
 
-        if d == 1:
-            for _ in range(n_initial):
-                counter += 1
-                listing = random_listing(rng, f"RP-{counter:06d}", created_day=d)
-                listings[listing.listing_id] = listing
+        n_new = n_initial if d == 1 else rng.randint(*NEW_PER_DAY)
+        for _ in range(n_new):
+            counter += 1
+            listing = random_listing(rng, f"RP-{counter:06d}", created_day=d)
+            listings[listing.listing_id] = listing
 
     return list(listings.values())
 
