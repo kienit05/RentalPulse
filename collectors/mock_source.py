@@ -3,6 +3,8 @@ import random
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
+P_NO_PRICE = 0.05 
+
 # Quận -> danh sách đường (dữ liệu mẫu để ghép thành địa chỉ)
 DISTRICTS = {
     "Cầu Giấy": ["Trần Thái Tông", "Dịch Vọng Hậu", "Nguyễn Khang"],
@@ -30,7 +32,29 @@ class Listing:
     district: str
     street: str
     house_no: int
+    created_day: int     # ngày (1, 2, 3...) tin xuất hiện lần đầu
     active: bool = True  # True = website đang hiển thị tin này
+
+def random_listing(rng, listing_id, created_day):
+    """Tạo MỘT tin đăng ngẫu nhiên, dưới dạng trạng thái THẬT (sạch)."""
+    ptype = rng.choice(list(PROPERTY_TYPES))
+    a_min, a_max, p_min, p_max = PROPERTY_TYPES[ptype]
+    area = rng.randint(a_min, a_max)
+    price = int(round(area * rng.randint(p_min, p_max), -5))  # làm tròn trăm nghìn
+    if rng.random() < P_NO_PRICE:
+        price = None
+    district = rng.choice(list(DISTRICTS))
+    street = rng.choice(DISTRICTS[district])
+    return Listing(
+        listing_id=listing_id,
+        ptype=ptype,
+        area=area,
+        price=price,
+        district=district,
+        street=street,
+        house_no=rng.randint(1, 200),
+        created_day=created_day,
+    )
 
 def format_price(price_vnd, rng):
     """Viết giá theo nhiều kiểu khác nhau, giống người đăng tin thật."""
