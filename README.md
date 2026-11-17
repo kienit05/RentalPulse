@@ -78,4 +78,4 @@ Mở `.env` và điền các giá trị còn trống trước khi chạy Docker.
 
 ## Giao diện RustFS
 
-![RustFS - bucket rental-bronze](docs/images/rustfs-bucket.png)
+![RustFS - bucket rental-bronze](image.png)
