@@ -93,6 +93,26 @@ def apply_scenarios(listings, day):
             elif action == "return":
                 listing.active = True
 
+def simulate(day, seed=42, n_initial=30):
+    """Chạy mô phỏng từ ngày 1 đến ngày `day`.
+
+    Trả về danh sách Listing (cả tin đang hiển thị lẫn tin đã bị gỡ).
+    """
+    rng = random.Random(seed)
+    listings = {}   # {listing_id: Listing}
+    counter = 0
+
+    for d in range(1, day + 1):
+        apply_scenarios(listings, d)
+
+        if d == 1:
+            for _ in range(n_initial):
+                counter += 1
+                listing = random_listing(rng, f"RP-{counter:06d}", created_day=d)
+                listings[listing.listing_id] = listing
+
+    return list(listings.values())
+
 def format_price(price_vnd, rng):
     """Viết giá theo nhiều kiểu khác nhau, giống người đăng tin thật."""
     millions = price_vnd / 1_000_000
