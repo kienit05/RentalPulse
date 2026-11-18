@@ -190,18 +190,25 @@ def simulate(day, seed=42, n_initial=30):
 
     return list(listings.values())
 
-def format_price(price_vnd, rng):
-    """Viết giá theo nhiều kiểu khác nhau, giống người đăng tin thật."""
-    millions = price_vnd / 1_000_000
+def format_price(price, rng):
+    """Viết giá theo nhiều kiểu như người đăng tin thật. price=None nghĩa là chưa có giá."""
+    if price is None:
+        return rng.choice(["Thỏa thuận", "Liên hệ"])
+    millions, rest = divmod(price, 1_000_000)  # 3_500_000 -> (3, 500_000)
     styles = [
-        f"{millions:.1f} triệu/tháng",                 # 3.5 triệu/tháng
-        f"{millions:.1f}".replace(".", ",") + " triệu",  # 3,5 triệu
-        f"{millions:.1f}tr",                            # 3.5tr
-        str(price_vnd),                                 # 3500000
-        f"{price_vnd:,}".replace(",", ".") + "đ",       # 3.500.000đ
-        "Thỏa thuận",                                   # không có giá
+        (f"{price / 1_000_000:.1f} triệu/tháng", 25),
+        (f"{price / 1_000_000:.1f}".replace(".", ",") + " triệu", 20),
+        (f"{price / 1_000_000:.1f}tr", 15),
+        (str(price), 10),
+        (f"{price:,}".replace(",", ".") + "đ", 10),
+        (f"{price // 1000}k", 12),
     ]
-    return rng.choices(styles, weights=[30, 20, 15, 15, 15, 5])[0]
+    if millions >= 1:
+        styles.append((f"{millions}tr{rest // 100_000}" if rest else f"{millions}tr", 8))
+    if rest == 500_000:
+        styles.append((f"{millions} triệu rưỡi", 5))
+    texts, weights = zip(*styles)
+    return rng.choices(texts, weights=weights)[0]
 
 
 def format_area(area, rng):
