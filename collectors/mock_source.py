@@ -1,7 +1,7 @@
 """Nguồn dữ liệu giả lập: tạo tin đăng thuê nhà trông giống thật, có cả dữ liệu bẩn."""
 import random
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, time, timedelta
 
 P_PRICE_CHANGE = 0.06  # xác suất mỗi ngày một tin đang hiển thị đổi giá
 P_NO_PRICE = 0.05  # xác suất một tin ghi "Thỏa thuận" (chưa có giá)
@@ -9,6 +9,7 @@ NEW_PER_DAY = (2, 6)  # mỗi ngày (từ ngày 2) có từ 2 đến 6 tin mới
 P_REMOVE = 0.04   # xác suất mỗi ngày một tin đang hiển thị bị gỡ
 P_REPOST = 0.30   # trong số tin bị gỡ, xác suất được đăng lại bằng mã mới
 P_RETURN = 0.15   # xác suất mỗi ngày một tin đã gỡ (chưa đăng lại) xuất hiện lại
+START_DATE = date(2026, 11, 1)  # ngày 1 của mô phỏng
 
 # Quận -> danh sách đường (dữ liệu mẫu để ghép thành địa chỉ)
 DISTRICTS = {
@@ -215,6 +216,44 @@ def format_area(area, rng):
     """Diện tích cũng viết nhiều kiểu, đôi khi bị thiếu."""
     styles = [f"{area}m2", f"{area} m²", str(area), None]
     return rng.choices(styles, weights=[40, 30, 25, 5])[0]
+
+def day_to_date(day):
+    """Ngày 1 của mô phỏng là START_DATE, ngày 2 là hôm sau..."""
+    return START_DATE + timedelta(days=day - 1)
+
+
+def to_raw(listing, seed, snap_date):
+    """Biến trạng thái THẬT của một tin thành dữ liệu THÔ (bẩn) như website hiển thị."""
+    # Cách viết của MỘT tin phải ổn định giữa các ngày. Nên không dùng rng chung
+    # của mô phỏng, mà dùng bộ ngẫu nhiên riêng có hạt giống lấy từ mã tin.
+    static = random.Random(f"{seed}:{listing.listing_id}:static")
+    price_rng = random.Random(f"{seed}:{listing.listing_id}:{listing.price}")
+
+    district_raw = static.choices(
+        [listing.district, f"Q. {listing.district}", listing.district.upper()],
+        weights=[70, 15, 15],
+    )[0]
+    area_raw = format_area(listing.area, static)
+    posted_at = datetime.combine(
+        day_to_date(listing.created_day),
+        time(static.randint(7, 22), static.randint(0, 59)),
+    )
+    title = f"{listing.ptype} {listing.area}m2 {listing.street} giá tốt"
+    if listing.is_repost:
+        title += " (đăng lại)"
+
+    return {
+        "listing_id": listing.listing_id,
+        "title": title,
+        "property_type": listing.ptype,
+        "price_raw": format_price(listing.price, price_rng),
+        "area_raw": area_raw,
+        "district_raw": district_raw,
+        "address_raw": f"Số {listing.house_no}, {listing.street}, {listing.district}",
+        "posted_at": posted_at.isoformat(),
+        "snapshot_date": snap_date.isoformat(),
+        "source": "mock",
+    }
 
 
 def make_listing(rng, listing_id, now):
