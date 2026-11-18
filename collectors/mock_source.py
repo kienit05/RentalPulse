@@ -84,6 +84,43 @@ SCENARIOS = [
             4: [("return", None)],
         },
     },
+    {
+        "id": "RP-S002",
+        "note": "Giá giảm ở ngày 3",
+        "base": dict(ptype="Căn hộ", area=60, price=8_000_000,
+                     district="Nam Từ Liêm", street="Mỹ Đình", house_no=88),
+        "events": {3: [("set_price", 7_500_000)]},
+    },
+    {
+        "id": "RP-S003",
+        "note": "Từ 'Thỏa thuận' sang có giá ở ngày 3",
+        "base": dict(ptype="Chung cư mini", area=30, price=None,
+                     district="Thanh Xuân", street="Nguyễn Trãi", house_no=45),
+        "events": {3: [("set_price", 5_000_000)]},
+    },
+    {
+        "id": "RP-S004",
+        "note": "Bị gỡ ở ngày 3, được đăng lại bằng mã S005",
+        "base": dict(ptype="Phòng trọ", area=20, price=3_000_000,
+                     district="Hà Đông", street="Nguyễn Trác", house_no=7),
+        "events": {3: [("remove", None)]},
+    },
+    {
+        "id": "RP-S005",
+        "note": "Bản đăng lại của S004: cùng căn phòng, mã mới",
+        "start_day": 3,
+        "is_repost": True,
+        "base": dict(ptype="Phòng trọ", area=20, price=3_000_000,
+                     district="Hà Đông", street="Nguyễn Trác", house_no=7),
+        "events": {},
+    },
+    {
+        "id": "RP-S006",
+        "note": "Không bao giờ thay đổi (đối chứng)",
+        "base": dict(ptype="Nhà nguyên căn", area=80, price=15_000_000,
+                     district="Đống Đa", street="Tây Sơn", house_no=101),
+        "events": {},
+    },
 ]
 
 
@@ -95,7 +132,8 @@ def apply_scenarios(listings, day):
     for sc in SCENARIOS:
         sid = sc["id"]
         if day == sc.get("start_day", 1):
-            listings[sid] = Listing(listing_id=sid, created_day=day, scripted=True, **sc["base"])
+                        listings[sid] = Listing(listing_id=sid, created_day=day, scripted=True,
+                                    is_repost=sc.get("is_repost", False), **sc["base"])
         listing = listings.get(sid)
         if listing is None:
             continue
