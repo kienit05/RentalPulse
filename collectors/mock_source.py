@@ -255,6 +255,16 @@ def to_raw(listing, seed, snap_date):
         "source": "mock",
     }
 
+def snapshot(day, seed=42, n_initial=30):
+    """Những tin website hiển thị vào ngày `day` (ngày 1, 2, 3, ...)."""
+    snap_date = day_to_date(day)
+    records = [
+        to_raw(listing, seed, snap_date)
+        for listing in simulate(day, seed, n_initial)
+        if listing.active
+    ]
+    random.Random(f"{seed}:order:{day}").shuffle(records)  # thứ tự không cố định
+    return records
 
 def make_listing(rng, listing_id, now):
     """Tạo MỘT tin đăng."""
