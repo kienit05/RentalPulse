@@ -2,7 +2,6 @@
 
 Data pipeline theo dõi tin đăng thuê nhà: thu thập, lưu trữ, làm sạch, phân tích biến động giá và vòng đời tin đăng.
 
-> Dự án đang được xây dựng theo từng giai đoạn. Dữ liệu hiện tại là dữ liệu giả lập (mock) mô phỏng tin đăng thật.
 
 ## Mục tiêu
 
