@@ -52,6 +52,21 @@ python -m venv .venv
 pip install -r requirements.txt
 python scripts\check_env.py
 ```
+Thu thập một ngày dữ liệu mô phỏng vào Bronze (ngày 1, 2, 3...):
+
+```powershell
+python -m collectors.collector --day 1
+```
+## Cấu trúc
+
+| Thư mục | Vai trò |
+|---|---|
+| `collectors/mock_source.py` | Sinh dữ liệu mô phỏng theo ngày |
+| `collectors/collector.py` | Điều phối: lấy snapshot, đóng gói batch, gọi storage |
+| `storage/rustfs.py` | Client RustFS (boto3) |
+| `scripts/check_env.py` | Kiểm tra kết nối PostgreSQL, RustFS, Kafka |
+
+Đường dẫn trong Bronze: `source=<nguồn>/dt=<ngày dữ liệu>/batch_id=<mã lần chạy>/listings.json`
 
 Mở `.env` và điền các giá trị còn trống trước khi chạy Docker. Kết quả mong đợi của `check_env.py` là ba dòng `OK` (Postgres, Object storage, Kafka).
 
