@@ -59,3 +59,7 @@ def list_keys(client, bucket, prefix=""):
     for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
         keys.extend(o["Key"] for o in page.get("Contents", []))
     return keys
+
+def get_bucket():
+    """Tên bucket Bronze lấy từ .env."""
+    return os.getenv("RUSTFS_BUCKET")
