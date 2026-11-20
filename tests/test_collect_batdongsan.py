@@ -2,7 +2,8 @@ import re
 
 import pytest
 
-from collectors.collector import collect_batdongsan
+from collectors.collector import collect_batdongsan, collect_batdongsan_html
+
 
 PAGE = """
 <html><body>
@@ -31,6 +32,7 @@ def test_batch_has_source_metadata_and_stamped_records():
     batch = collect_batdongsan("https://example.test/list", FakeFetcher(PAGE))
     assert batch["source"] == "batdongsan"
     assert batch["url"] == "https://example.test/list"
+    assert batch["method"] == "http"
     assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", batch["snapshot_date"])
     assert batch["record_count"] == len(batch["records"]) == 1
     record = batch["records"][0]
@@ -47,3 +49,15 @@ def test_page_with_no_listings_is_an_error_not_an_empty_batch():
 def test_poster_id_does_not_reach_bronze():
     batch = collect_batdongsan("https://example.test/list", FakeFetcher(PAGE))
     assert "999" not in str(batch)
+
+def test_saved_html_records_how_it_was_obtained():
+    batch = collect_batdongsan_html(PAGE, "https://example.test/list", "2026-11-18")
+    assert batch["method"] == "manual_save"
+    assert batch["snapshot_date"] == "2026-11-18"
+    assert batch["records"][0]["snapshot_date"] == "2026-11-18"
+    assert batch["records"][0]["listing_id"] == "1001"
+
+
+def test_saved_html_without_listings_is_an_error():
+    with pytest.raises(ValueError):
+        collect_batdongsan_html("<html></html>", "https://example.test/list")
