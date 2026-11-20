@@ -5,14 +5,16 @@ import uuid
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-from collectors.batdongsan_parser import parse_list_page
+from collectors import batdongsan_parser, nhatot_parser
 from collectors.fetcher import PoliteFetcher
 from collectors.mock_source import day_to_date, snapshot
 from storage.rustfs import ensure_bucket, get_bucket, get_client, put_json
 
 SOURCE = "mock"
 BATDONGSAN = "batdongsan"
+NHATOT = "nhatot"
 BATDONGSAN_LIST_URL = "https://batdongsan.com.vn/cho-thue-nha-tro-phong-tro"
+NHATOT_LIST_URL = "https://www.nhatot.com/thue-phong-tro-ha-noi"
 VN_TZ = timezone(timedelta(hours=7))  # ngày dữ liệu tính theo giờ Việt Nam
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -52,33 +54,39 @@ def collect(day, seed):
     )
 
 
-def _batdongsan_batch(html, url, method, snapshot_date=None):
-    """Tách tin từ HTML, gắn nguồn và ngày chụp, đóng gói. method ghi lại cách lấy HTML."""
+def _html_batch(source, parse_page, html, url, method, snapshot_date=None):
+    """Tách tin từ HTML của một nguồn, gắn nguồn và ngày chụp, đóng gói.
+    method ghi lại cách lấy HTML (http hay manual_save)."""
     snapshot_date = snapshot_date or datetime.now(VN_TZ).date().isoformat()
-    records = parse_list_page(html)
+    records = parse_page(html)
     for record in records:
-        record["source"] = BATDONGSAN
+        record["source"] = source
         record["snapshot_date"] = snapshot_date
-    return _make_batch(BATDONGSAN, snapshot_date, records, url=url, method=method)
+    return _make_batch(source, snapshot_date, records, url=url, method=method)
 
 
 def collect_batdongsan(url, fetcher):
-    """Nguồn thật, tải trực tiếp (có thể bị site chặn)."""
-    return _batdongsan_batch(fetcher.fetch(url), url, "http")
+    """Batdongsan, tải trực tiếp (thường bị site chặn)."""
+    return _html_batch(BATDONGSAN, batdongsan_parser.parse_list_page, fetcher.fetch(url), url, "http")
 
 
 def collect_batdongsan_html(html, url, snapshot_date=None):
-    """Nguồn thật, từ trang do người dùng tự mở và lưu lại bằng trình duyệt."""
-    return _batdongsan_batch(html, url, "manual_save", snapshot_date)
+    """Batdongsan, từ trang do người dùng tự mở và lưu lại bằng trình duyệt."""
+    return _html_batch(BATDONGSAN, batdongsan_parser.parse_list_page, html, url, "manual_save", snapshot_date)
+
+
+def collect_nhatot_html(html, url, snapshot_date=None):
+    """Nhà Tốt, từ trang do người dùng tự mở và lưu lại bằng trình duyệt."""
+    return _html_batch(NHATOT, nhatot_parser.parse_list_page, html, url, "manual_save", snapshot_date)
 
 
 def build_parser():
     parser = argparse.ArgumentParser(description="Thu thập tin đăng vào Bronze")
-    parser.add_argument("--source", choices=[SOURCE, BATDONGSAN], default=SOURCE)
+    parser.add_argument("--source", choices=[SOURCE, BATDONGSAN, NHATOT], default=SOURCE)
     parser.add_argument("--day", type=int, default=1, help="Chỉ cho mock: ngày mô phỏng 1, 2, 3, ...")
     parser.add_argument("--seed", type=int, default=42, help="Chỉ cho mock: hạt giống")
-    parser.add_argument("--url", default=BATDONGSAN_LIST_URL, help="Chỉ cho batdongsan: trang danh sách")
-    parser.add_argument("--html-file", help="Chỉ cho batdongsan: đọc từ file HTML đã lưu thay vì tải")
+    parser.add_argument("--url", help="Trang danh sách của nguồn thật (mặc định theo nguồn)")
+    parser.add_argument("--html-file", help="Nguồn thật: đọc từ file HTML đã lưu thay vì tải")
     parser.add_argument("--snapshot-date", help="Chỉ cho --html-file: ngày lưu trang (YYYY-MM-DD), mặc định hôm nay")
     return parser
 
@@ -87,13 +95,20 @@ def main(argv=None):
     args = build_parser().parse_args(argv)
 
     try:
-        if args.source == BATDONGSAN and args.html_file:
+        if args.source == NHATOT and not args.html_file:
+            raise ValueError("Nhà Tốt chỉ hỗ trợ --html-file (không tải tự động)")
+        if args.source == SOURCE and args.html_file:
+            raise ValueError("--html-file chỉ dùng cho nguồn thật, không dùng cho mock")
+        if args.html_file:
             if args.snapshot_date:
                 date.fromisoformat(args.snapshot_date)  # sai định dạng thì báo lỗi ngay
             html = Path(args.html_file).read_text(encoding="utf-8")
-            batch = collect_batdongsan_html(html, args.url, args.snapshot_date)
+            if args.source == NHATOT:
+                batch = collect_nhatot_html(html, args.url or NHATOT_LIST_URL, args.snapshot_date)
+            else:
+                batch = collect_batdongsan_html(html, args.url or BATDONGSAN_LIST_URL, args.snapshot_date)
         elif args.source == BATDONGSAN:
-            batch = collect_batdongsan(args.url, PoliteFetcher())
+            batch = collect_batdongsan(args.url or BATDONGSAN_LIST_URL, PoliteFetcher())
         else:
             batch = collect(args.day, args.seed)
         log.info("Batch %s: nguồn %s, %d tin", batch["batch_id"], batch["source"], batch["record_count"])
