@@ -3,3 +3,4 @@ confluent-kafka==2.16.1
 psycopg2-binary==2.9.13
 python-dotenv==1.2.4
 beautifulsoup4==4.15.0
+requests==2.34.2
