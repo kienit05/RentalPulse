@@ -3,6 +3,7 @@
     python -m etl.run_pipeline --init    # lần đầu: tạo schema, bảng, hàm, view rồi nạp dữ liệu
     python -m etl.run_pipeline           # các lần sau: chỉ nạp dữ liệu mới
     python -m etl.run_pipeline --skip-bronze   # bỏ bước đọc Bronze, chạy lại từ raw trở đi
+    python -m etl.run_pipeline --rebuild # xóa staging và core, dựng lại hoàn toàn từ raw
 
 Mọi bước đều chạy lại được nhiều lần mà không sinh dữ liệu trùng.
 """
@@ -31,6 +32,11 @@ LOAD_FILES = [
     "006_load_core.sql",
 ]
 
+# Staging và core là tầng dẫn xuất: luôn dựng lại được từ raw. Raw là nguồn sự thật.
+REBUILD_SQL = """
+TRUNCATE staging.listings, core.fact_listing_snapshot, core.listing_source RESTART IDENTITY;
+"""
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger("pipeline")
 
@@ -49,9 +55,22 @@ def run_sql_file(conn, name):
     log.info("%s xong (%.2fs)", name, time.monotonic() - started)
 
 
+def rebuild_derived_layers(conn):
+    """Xóa sạch staging và core (giữ nguyên raw và cấu trúc) để nạp lại từ đầu."""
+    try:
+        with conn.cursor() as cur:
+            cur.execute(REBUILD_SQL)
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    log.info("Đã xóa staging và core, sẽ dựng lại từ raw")
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Chạy chuỗi ETL RentalPulse")
     parser.add_argument("--init", action="store_true", help="Tạo schema, bảng, hàm, view trước khi nạp")
+    parser.add_argument("--rebuild", action="store_true", help="Xóa staging và core rồi dựng lại từ raw")
     parser.add_argument("--skip-bronze", action="store_true", help="Không đọc Bronze, chạy từ raw trở đi")
     args = parser.parse_args(argv)
 
@@ -72,6 +91,8 @@ def main(argv=None):
                 if exc.code:
                     log.error("Nạp Bronze vào raw thất bại, dừng chuỗi")
                     raise
+        if args.rebuild:
+            rebuild_derived_layers(conn)
         for name in LOAD_FILES:
             run_sql_file(conn, name)
     except SystemExit:
