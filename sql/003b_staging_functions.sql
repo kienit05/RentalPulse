@@ -2,7 +2,7 @@
 ALTER TABLE staging.listings ADD COLUMN IF NOT EXISTS district_norm TEXT;
 ALTER TABLE staging.listings ADD COLUMN IF NOT EXISTS is_simulated BOOLEAN NOT NULL DEFAULT false;
 
--- Chuỗi giá ("3400k", "1tr3", "18.4 triệu/tháng", "9,6 triệu", "3.400.000 đ") -> số VND.
+-- Chuỗi giá ("3400k", "1tr3", "18.4 triệu/tháng", "9,6 triệu", "3.400.000 đ", "3400000") -> số VND.
 -- Định dạng lạ hoặc "Thỏa thuận" -> NULL (không đoán).
 CREATE OR REPLACE FUNCTION staging.parse_price_vnd(txt TEXT)
 RETURNS NUMERIC LANGUAGE plpgsql IMMUTABLE AS $$
@@ -32,6 +32,11 @@ BEGIN
         RETURN regexp_replace(m[1], '[.,]', '', 'g')::numeric;
     END IF;
 
+    m := regexp_match(s, '^(\d{6,})\s*(đ|d|vnd|vnđ)?$');                        -- 3400000, 3400000đ
+    IF m IS NOT NULL THEN
+        RETURN m[1]::numeric;
+    END IF;
+
     RETURN NULL;
 END $$;
 
@@ -47,7 +52,7 @@ BEGIN
     RETURN replace(m[1], ',', '.')::numeric;
 END $$;
 
--- Quận: bỏ tiền tố, chuẩn hóa chữ hoa/thường ("THANH XUÂN" và "Quận Thanh Xuân" -> "Thanh Xuân")
+-- Quận: bỏ tiền tố, chuẩn hóa chữ hoa/thường ("THANH XUÂN", "Quận Thanh Xuân", "Q. Thanh Xuân" -> "Thanh Xuân")
 CREATE OR REPLACE FUNCTION staging.normalize_district(txt TEXT)
 RETURNS TEXT LANGUAGE plpgsql IMMUTABLE AS $$
 DECLARE
@@ -55,6 +60,7 @@ DECLARE
 BEGIN
     IF txt IS NULL OR btrim(txt) = '' THEN RETURN NULL; END IF;
     s := btrim(regexp_replace(txt, '\s+', ' ', 'g'));
-    s := regexp_replace(s, '^(quận|huyện|thị xã|thành phố)\s+', '', 'i');
+    s := regexp_replace(s, '^(quận|huyện|thị xã|thành phố)\s+', '', 'i');   -- Quận Hà Đông
+    s := regexp_replace(s, '^(q|h|tx|tp)\.\s*', '', 'i');                   -- Q. Hà Đông, Q.Hà Đông
     RETURN initcap(lower(s));
 END $$;
