@@ -16,7 +16,7 @@ File này là nguồn sự thật (source of truth) về nguồn dữ liệu. Kh
 |---|---|---|---|---|---|
 | mock | Sinh bằng code (`collectors/mock_source.py`) | Dữ liệu tự tạo | Theo tham số `--day` | Không | Có kịch bản kiểm thử và dữ liệu bẩn có chủ ý |
 | Chợ Tốt (nha.chotot.com) | Gọi public JSON API (`gateway.chotot.com`), không cần đăng nhập | Chưa xác minh ToS — cần kiểm tra trước khi dùng thương mại | 1 lần/ngày, giãn cách request, xử lý 429 | Mô tả có thể chứa SĐT → chỉ giữ trường cần thiết, không lưu SĐT | Nguồn chính. JSON có cấu trúc, không cần browser, không CAPTCHA |
-| Batdongsan.com.vn | Headless browser (Puppeteer/Playwright) hoặc dịch vụ scraping có xử lý JS + proxy | Chưa xác minh ToS — cần kiểm tra robots.txt và điều khoản | 1 lần/ngày, giới hạn số trang mỗi lần chạy | Mô tả có thể chứa tên/SĐT → lọc bỏ khi normalize | Nguồn chính. Dữ liệu đã chuẩn hóa (giá, diện tích, số phòng) |
+| Batdongsan.com.vn | cách truy cập chưa quyết định, nếu bị chặn (Cloudflare, captcha, 403/429) thì dừng, không vượt. | Chưa xác minh ToS — cần kiểm tra robots.txt và điều khoản | 1 lần/ngày, giới hạn số trang mỗi lần chạy | Mô tả có thể chứa tên/SĐT → lọc bỏ khi normalize | Nguồn chính. Dữ liệu đã chuẩn hóa (giá, diện tích, số phòng) |
 
 ## Nguồn ứng viên
 
