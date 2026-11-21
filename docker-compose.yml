@@ -8,10 +8,30 @@ x-airflow-common: &airflow-common
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-db/airflow
     AIRFLOW__CORE__LOAD_EXAMPLES: "false"
     AIRFLOW__WEBSERVER__SECRET_KEY: "rentalpulse-dev-secret"
+    # Cài thêm thư viện cho code dự án (chỉ dùng khi học tập: cài lại mỗi lần container khởi động).
+    # boto3 và psycopg2 đã có sẵn trong image Airflow.
+    _PIP_ADDITIONAL_REQUIREMENTS: "confluent-kafka==2.16.1 beautifulsoup4==4.15.0 python-dotenv==1.2.4"
+    PYTHONPATH: /opt/airflow/project
+    # Trong Docker, dịch vụ gọi nhau bằng tên dịch vụ, không dùng localhost như trên máy host.
+    POSTGRES_HOST: postgres
+    POSTGRES_PORT: "5432"
+    POSTGRES_USER: ${POSTGRES_USER}
+    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    POSTGRES_DB: ${POSTGRES_DB}
+    RUSTFS_ENDPOINT: rustfs:9000
+    RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY}
+    RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY}
+    RUSTFS_BUCKET: ${RUSTFS_BUCKET}
+    KAFKA_BOOTSTRAP: kafka:9092
   volumes:
     - ./airflow/dags:/opt/airflow/dags
     - ./airflow/logs:/opt/airflow/logs
     - ./dbt:/opt/airflow/dbt
+    # Mã nguồn dự án, chỉ đọc. Không mount .env, .venv hay data/.
+    - ./etl:/opt/airflow/project/etl:ro
+    - ./collectors:/opt/airflow/project/collectors:ro
+    - ./storage:/opt/airflow/project/storage:ro
+    - ./sql:/opt/airflow/project/sql:ro
   depends_on:
     airflow-db:
       condition: service_healthy
