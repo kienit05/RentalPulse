@@ -1,0 +1,47 @@
+version: 2
+
+sources:
+  - name: staging
+    schema: staging
+    tables:
+      - name: listings
+        columns:
+          - name: source
+            data_tests: [not_null]
+          - name: listing_id
+            data_tests: [not_null]
+          - name: snapshot_date
+            data_tests: [not_null]
+
+  - name: core
+    schema: core
+    tables:
+      - name: listing_source
+        columns:
+          - name: listing_key
+            data_tests: [not_null, unique]
+          - name: source
+            data_tests:
+              - not_null
+              - accepted_values:
+                  arguments:
+                    values: ["mock", "batdongsan", "nhatot"]
+          - name: listing_id
+            data_tests: [not_null]
+
+      - name: fact_listing_snapshot
+        columns:
+          - name: listing_key
+            data_tests:
+              - not_null
+              - relationships:
+                  arguments:
+                    to: source('core', 'listing_source')
+                    field: listing_key
+          - name: snapshot_date
+            data_tests: [not_null]
+
+  - name: analytics
+    schema: analytics
+    tables:
+      - name: v_data_quality_daily
