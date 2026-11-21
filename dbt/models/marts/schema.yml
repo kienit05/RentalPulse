@@ -1,0 +1,14 @@
+version: 2
+
+models:
+  - name: mart_price_by_district_daily
+    description: "Giá thuê theo nguồn, quận và ngày chụp. Nguồn dữ liệu cho dashboard giá."
+    columns:
+      - name: source
+        data_tests: [not_null]
+      - name: snapshot_date
+        data_tests: [not_null]
+      - name: district
+        data_tests: [not_null]
+      - name: n_listings
+        data_tests: [not_null]
