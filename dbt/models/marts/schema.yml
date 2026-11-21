@@ -12,3 +12,13 @@ models:
         data_tests: [not_null]
       - name: n_listings
         data_tests: [not_null]
+
+  - name: mart_daily_listing_flow
+    description: "Dòng chảy của tin theo nguồn và ngày chụp: hoạt động, mới, biến mất, quay lại, đổi giá."
+    columns:
+      - name: source
+        data_tests: [not_null]
+      - name: snapshot_date
+        data_tests: [not_null]
+      - name: active_listings
+        data_tests: [not_null]

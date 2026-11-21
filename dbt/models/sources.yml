@@ -41,6 +41,9 @@ sources:
           - name: snapshot_date
             data_tests: [not_null]
 
+      - name: v_listing_events
+      - name: v_price_history
+
   - name: analytics
     schema: analytics
     tables:
