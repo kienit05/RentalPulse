@@ -40,16 +40,20 @@ BEGIN
     RETURN NULL;
 END $$;
 
--- Diện tích ("18m2", "84 m²", "12,5 m²") -> số m2. Lạ -> NULL.
 CREATE OR REPLACE FUNCTION staging.parse_area_m2(txt TEXT)
 RETURNS NUMERIC LANGUAGE plpgsql IMMUTABLE AS $$
 DECLARE
     m TEXT[];
+    area NUMERIC;
 BEGIN
     IF txt IS NULL THEN RETURN NULL; END IF;
-    m := regexp_match(lower(btrim(txt)), '^(\d+(?:[.,]\d+)?)\s*(m2|m²|m)$');
+    -- Có đơn vị (18m2, 84 m², 12,5 m) hoặc số trần (30, 12,5): đều hiểu là mét vuông
+    m := regexp_match(lower(btrim(txt)), '^(\d+(?:[.,]\d+)?)\s*(m2|m²|m)?$');
     IF m IS NULL THEN RETURN NULL; END IF;
-    RETURN replace(m[1], ',', '.')::numeric;
+    area := replace(m[1], ',', '.')::numeric;
+    -- Ngoài khoảng hợp lý thì coi là không đọc được, không đoán
+    IF area < 1 OR area > 1000 THEN RETURN NULL; END IF;
+    RETURN area;
 END $$;
 
 -- Quận: bỏ tiền tố, chuẩn hóa chữ hoa/thường ("THANH XUÂN", "Quận Thanh Xuân", "Q. Thanh Xuân" -> "Thanh Xuân")
