@@ -2,15 +2,13 @@
 # KHỐI DÙNG CHUNG CHO AIRFLOW (tái sử dụng bằng <<: *airflow-common)
 # ============================================================
 x-airflow-common: &airflow-common
-  image: apache/airflow:2.10.5
+  build: ./airflow   # dựng image riêng từ airflow/Dockerfile (có dbt và thư viện của dự án)
+  image: rentalpulse-airflow:2.10.5
   environment:
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-db/airflow
     AIRFLOW__CORE__LOAD_EXAMPLES: "false"
     AIRFLOW__WEBSERVER__SECRET_KEY: "rentalpulse-dev-secret"
-    # Cài thêm thư viện cho code dự án (chỉ dùng khi học tập: cài lại mỗi lần container khởi động).
-    # boto3 và psycopg2 đã có sẵn trong image Airflow.
-    _PIP_ADDITIONAL_REQUIREMENTS: "confluent-kafka==2.16.1 beautifulsoup4==4.15.0 python-dotenv==1.2.4"
     PYTHONPATH: /opt/airflow/project
     # Trong Docker, dịch vụ gọi nhau bằng tên dịch vụ, không dùng localhost như trên máy host.
     POSTGRES_HOST: postgres
