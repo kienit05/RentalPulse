@@ -24,6 +24,7 @@ with DAG(
     start_date=datetime(2026, 11, 21),
     schedule="0 1 * * *",  # 01:00 UTC mỗi ngày = 08:00 sáng giờ Việt Nam
     catchup=False,
+    max_active_runs=1,  # không cho hai lần chạy chồng nhau (tránh đua nhau ở dbt và ở next_mock_day)
     default_args=default_args,
     tags=["rentalpulse"],
 ) as dag:
@@ -70,7 +71,15 @@ with DAG(
         bash_command=f"cd {DBT_DIR} && {DBT} test --profiles-dir .",
     )
 
+    log_run = BashOperator(
+        task_id="log_pipeline_run",
+        # run_id do Airflow điền vào; ghi sổ cả khi task trước đó lỗi
+        bash_command=f'cd {PROJECT_DIR} && python -m etl.log_run --run-id "{{{{ run_id }}}}"',
+        trigger_rule="all_done",
+    )
+
     collect_mock >> publish_batches >> load_raw >> build_layers
     # Sau khi Staging/Core xong, hai nhánh chạy song song: phát sự kiện đổi giá, và dbt
     build_layers >> [publish_price_changes, dbt_run]
     dbt_run >> dbt_test
+    [publish_price_changes, dbt_test] >> log_run
