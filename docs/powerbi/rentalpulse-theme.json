@@ -1,0 +1,30 @@
+{
+  "name": "RentalPulse",
+  "dataColors": ["#0F766E", "#E11D48", "#2563EB", "#F59E0B", "#7C3AED", "#64748B"],
+  "background": "#FFFFFF",
+  "foreground": "#1F2937",
+  "tableAccent": "#0F766E",
+  "good": "#16A34A",
+  "neutral": "#D97706",
+  "bad": "#DC2626",
+  "textClasses": {
+    "callout": { "fontSize": 30, "fontFace": "Segoe UI Semibold", "color": "#111827" },
+    "title": { "fontSize": 13, "fontFace": "Segoe UI Semibold", "color": "#111827" },
+    "header": { "fontSize": 12, "fontFace": "Segoe UI Semibold", "color": "#374151" },
+    "label": { "fontSize": 10, "fontFace": "Segoe UI", "color": "#6B7280" }
+  },
+  "visualStyles": {
+    "*": {
+      "*": {
+        "background": [{ "show": true, "color": { "solid": { "color": "#FFFFFF" } }, "transparency": 0 }],
+        "border": [{ "show": true, "color": { "solid": { "color": "#E5E7EB" } }, "radius": 10 }],
+        "dropShadow": [{ "show": false }]
+      }
+    },
+    "page": {
+      "*": {
+        "background": [{ "color": { "solid": { "color": "#F3F4F6" } }, "transparency": 0 }]
+      }
+    }
+  }
+}
