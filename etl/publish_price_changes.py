@@ -1,7 +1,7 @@
 """Phát event price_changed lên Kafka, lấy từ view core.v_price_history.
 
-Chỉ lấy các dòng giá tăng hoặc giảm thật sự. event_id ổn định theo
-(source, listing_id, snapshot_date) nên gửi lại không tạo ra sự kiện mới về mặt ý nghĩa.
+Chỉ lấy các dòng giá tăng hoặc giảm thật sự, và chỉ phát những event chưa có trong
+sổ analytics.published_events. Chỉ ghi sổ SAU KHI Kafka xác nhận đã nhận (at-least-once).
 """
 import argparse
 import json
@@ -11,6 +11,7 @@ from decimal import Decimal
 
 from confluent_kafka import Producer
 from dotenv import load_dotenv
+from psycopg2.extras import execute_values
 
 from etl.load_raw import connect
 
@@ -64,11 +65,40 @@ def build_price_event(row):
     return f"{source}:{listing_id}", event
 
 
+def filter_unpublished(events, published_ids):
+    """events: danh sách (message_key, event). Giữ lại event chưa có trong sổ."""
+    return [(key, event) for key, event in events if event["event_id"] not in published_ids]
+
+
 def fetch_changes(conn, since=None):
     with conn.cursor() as cur:
         cur.execute(QUERY, {"since": since})
         columns = [col[0] for col in cur.description]
         return [dict(zip(columns, values)) for values in cur.fetchall()]
+
+
+def load_published_ids(conn, event_ids):
+    if not event_ids:
+        return set()
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT event_id FROM analytics.published_events WHERE event_id = ANY(%s)",
+            (list(event_ids),),
+        )
+        return {row[0] for row in cur.fetchall()}
+
+
+def record_published(conn, event_ids):
+    if not event_ids:
+        return
+    with conn.cursor() as cur:
+        execute_values(
+            cur,
+            "INSERT INTO analytics.published_events (event_id, topic) VALUES %s "
+            "ON CONFLICT (event_id) DO NOTHING",
+            [(event_id, TOPIC) for event_id in event_ids],
+        )
+    conn.commit()
 
 
 def main(argv=None):
@@ -78,40 +108,48 @@ def main(argv=None):
 
     conn = connect()
     try:
-        changes = fetch_changes(conn, args.since)
+        events = [build_price_event(row) for row in fetch_changes(conn, args.since)]
+        published = load_published_ids(conn, [event["event_id"] for _, event in events])
+        pending = filter_unpublished(events, published)
+        log.info(
+            "Tìm thấy %d thay đổi giá, đã phát trước đó %d, cần phát %d (topic %s)",
+            len(events), len(events) - len(pending), len(pending), TOPIC,
+        )
+
+        producer = Producer(
+            {"bootstrap.servers": BOOTSTRAP, "acks": "all", "enable.idempotence": True}
+        )
+        delivered = set()
+        stats = {"failed": 0}
+
+        def make_callback(event_id):
+            def on_delivery(err, msg):
+                if err is not None:
+                    stats["failed"] += 1
+                    log.error("Gửi lỗi: %s", err)
+                else:
+                    delivered.add(event_id)
+            return on_delivery
+
+        for message_key, event in pending:
+            producer.produce(
+                TOPIC,
+                key=message_key,
+                value=json.dumps(event, ensure_ascii=False).encode("utf-8"),
+                on_delivery=make_callback(event["event_id"]),
+            )
+            producer.poll(0)
+
+        remaining = producer.flush(30)
+        record_published(conn, delivered)  # chỉ ghi sổ những event đã được xác nhận
+        if remaining:
+            log.error("Còn %d message chưa được xác nhận", remaining)
+            raise SystemExit(1)
+        log.info("Xong: gửi %d, lỗi %d", len(delivered), stats["failed"])
+        if stats["failed"]:
+            raise SystemExit(1)
     finally:
         conn.close()
-    log.info("Tìm thấy %d thay đổi giá, gửi tới topic %s", len(changes), TOPIC)
-
-    producer = Producer(
-        {"bootstrap.servers": BOOTSTRAP, "acks": "all", "enable.idempotence": True}
-    )
-    stats = {"delivered": 0, "failed": 0}
-
-    def on_delivery(err, msg):
-        if err is not None:
-            stats["failed"] += 1
-            log.error("Gửi lỗi: %s", err)
-        else:
-            stats["delivered"] += 1
-
-    for row in changes:
-        message_key, event = build_price_event(row)
-        producer.produce(
-            TOPIC,
-            key=message_key,
-            value=json.dumps(event, ensure_ascii=False).encode("utf-8"),
-            on_delivery=on_delivery,
-        )
-        producer.poll(0)
-
-    remaining = producer.flush(30)
-    if remaining:
-        log.error("Còn %d message chưa được xác nhận", remaining)
-        raise SystemExit(1)
-    log.info("Xong: gửi %d, lỗi %d", stats["delivered"], stats["failed"])
-    if stats["failed"]:
-        raise SystemExit(1)
 
 
 if __name__ == "__main__":

@@ -25,6 +25,7 @@ DDL_FILES = [
     "005_core_tables.sql",
     "007_history_views.sql",
     "008_repost_candidates.sql",
+    "009_published_events.sql",
 ]
 # Nạp dữ liệu: raw -> staging -> core.
 LOAD_FILES = [
