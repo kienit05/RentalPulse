@@ -28,7 +28,8 @@ def events(conn, listing_id):
     with conn.cursor() as cur:
         cur.execute(
             "SELECT event_date, event_type FROM core.v_listing_events "
-            "WHERE source = 'mock' AND listing_id = %s ORDER BY event_date",
+            "WHERE source = 'mock' AND listing_id = %s "
+            "AND event_date <= DATE '2026-11-04' ORDER BY event_date",
             (listing_id,),
         )
         return [(d.isoformat(), t) for d, t in cur.fetchall()]
@@ -38,7 +39,8 @@ def changes(conn, listing_id):
     with conn.cursor() as cur:
         cur.execute(
             "SELECT snapshot_date, change_type FROM core.v_price_history "
-            "WHERE source = 'mock' AND listing_id = %s ORDER BY snapshot_date",
+            "WHERE source = 'mock' AND listing_id = %s "
+            "AND snapshot_date <= DATE '2026-11-04' ORDER BY snapshot_date",
             (listing_id,),
         )
         return [(d.isoformat(), t) for d, t in cur.fetchall()]

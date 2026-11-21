@@ -38,6 +38,7 @@ def history(conn, listing_id):
             FROM core.fact_listing_snapshot f
             JOIN core.listing_source ls USING (listing_key)
             WHERE ls.source = 'mock' AND ls.listing_id = %s
+              AND f.snapshot_date <= DATE '2026-11-04'  -- đáp án kịch bản chỉ định nghĩa tới ngày 4
             ORDER BY f.snapshot_date
             """,
             (listing_id,),
