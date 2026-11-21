@@ -2,6 +2,7 @@
 
 Mỗi event: key = "source:listing_id", value = JSON listing_observed.
 Chạy từ máy Windows nên dùng cổng ngoài localhost:29092.
+--only-new: bỏ qua batch đã có trong raw.listings (đã được consumer nạp).
 """
 import argparse
 import json
@@ -11,7 +12,7 @@ import os
 from confluent_kafka import Producer
 from dotenv import load_dotenv
 
-from etl.load_raw import list_batch_keys, read_batch
+from etl.load_raw import connect, list_batch_keys, read_batch
 from storage.rustfs import get_bucket, get_client
 
 load_dotenv()
@@ -21,6 +22,29 @@ log = logging.getLogger("publish_batch")
 
 BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "localhost:29092")
 TOPIC = os.getenv("KAFKA_TOPIC_LISTINGS", "listing.events")
+
+
+def batch_id_from_key(key):
+    """'source=x/dt=d/batch_id=ID/listings.json' -> 'ID'. Không có thì trả None."""
+    marker = "batch_id="
+    if marker not in key:
+        return None
+    return key.split(marker, 1)[1].split("/", 1)[0] or None
+
+
+def filter_new_keys(keys, loaded_batch_ids):
+    """Giữ lại các key có batch chưa nằm trong raw.listings."""
+    return [key for key in keys if batch_id_from_key(key) not in loaded_batch_ids]
+
+
+def loaded_batch_ids():
+    conn = connect()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT DISTINCT batch_id FROM raw.listings")
+            return {row[0] for row in cur.fetchall()}
+    finally:
+        conn.close()
 
 
 def build_event(key, batch, record_no, record):
@@ -81,12 +105,21 @@ def publish_batch(producer, key, batch, stats):
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Gửi Bronze lên Kafka")
     parser.add_argument("--source", help="Chỉ gửi một nguồn: mock, batdongsan hoặc nhatot")
+    parser.add_argument(
+        "--only-new",
+        action="store_true",
+        help="Bỏ qua batch đã có trong raw.listings",
+    )
     args = parser.parse_args(argv)
 
     client = get_client()
     bucket = get_bucket()
     keys = list_batch_keys(client, bucket, args.source)
-    log.info("Tìm thấy %d batch trong Bronze, gửi tới topic %s", len(keys), TOPIC)
+    if args.only_new:
+        before = len(keys)
+        keys = filter_new_keys(keys, loaded_batch_ids())
+        log.info("--only-new: bỏ qua %d batch đã nạp, còn %d batch mới", before - len(keys), len(keys))
+    log.info("Gửi %d batch tới topic %s", len(keys), TOPIC)
 
     producer = make_producer()
     stats = {"delivered": 0, "failed": 0, "skipped": 0}
