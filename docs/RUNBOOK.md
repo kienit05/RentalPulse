@@ -56,9 +56,7 @@ docker exec rental-airflow-scheduler airflow tasks list rentalpulse_kafka_flow
 
 ## Bước 2. Lưu trang dữ liệu thật vào inbox
 
-Nhà Tốt và Batdongsan trả HTTP 403 cho chương trình tải tự động. Dự án tôn trọng điều đó, không giả
-trình duyệt hay dùng proxy để vượt chặn, mà dùng *landing zone*: người lưu trang bằng trình duyệt,
-pipeline tự nạp phần còn lại.
+
 
 Mở từng trang, Ctrl+S, chọn **"Webpage, HTML Only"**, lưu vào `data/inbox/`:
 
