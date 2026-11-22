@@ -104,3 +104,28 @@ def test_no_pipeline_flag_skips_etl(env):
     (inbox / "nhatot_2026-11-21.html").write_text("x")
     ingest_inbox.main(["--no-pipeline"])
     assert len(calls) == 1 and pipeline_runs == []
+
+def _save(inbox, source, day, pages):
+    for p in pages:
+        suffix = "" if p == 1 else f"_p{p}"
+        (inbox / f"{source}_{day}{suffix}.html").write_text("x")
+
+
+def test_incomplete_groups_reports_missing_pages(env):
+    inbox, *_ = env
+    _save(inbox, "nhatot", "2026-11-23", [1, 2, 4])
+    _save(inbox, "batdongsan", "2026-11-23", [1, 2, 3])
+    pending = ingest_inbox.find_pending(inbox)
+    assert ingest_inbox.incomplete_groups(pending, 3) == {("nhatot", "2026-11-23"): [3]}
+
+
+def test_complete_group_is_ingested_incomplete_group_stays(env):
+    inbox, processed, calls, _ = env
+    _save(inbox, "batdongsan", "2026-11-23", [1, 2, 3])
+    _save(inbox, "nhatot", "2026-11-23", [1, 3])
+    with pytest.raises(SystemExit) as exc:
+        ingest_inbox.main(["--no-pipeline", "--expect-pages", "3"])
+    assert exc.value.code == 1
+    assert {c[1] for c in calls} == {"batdongsan"} and len(calls) == 3
+    assert sorted(p.name for p in inbox.iterdir()) == ["nhatot_2026-11-23.html", "nhatot_2026-11-23_p3.html"]
+    assert len(list(processed.iterdir())) == 3

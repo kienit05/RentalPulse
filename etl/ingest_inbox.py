@@ -5,9 +5,12 @@ Quy ước tên file: <nguồn>_<YYYY-MM-DD>[_p<số trang>].html, ví dụ
     nhatot_2026-11-23_p2.html    (trang 2)
 Nguồn là batdongsan hoặc nhatot; ngày là ngày bạn lưu trang.
 
-    python -m etl.ingest_inbox                # nạp mọi file trong inbox rồi chạy ETL
-    python -m etl.ingest_inbox --no-pipeline  # chỉ nạp Bronze, chưa chạy ETL
+    python -m etl.ingest_inbox                                # nạp mọi file rồi chạy ETL
+    python -m etl.ingest_inbox --no-pipeline                  # chỉ nạp Bronze (Airflow dùng cách này)
+    python -m etl.ingest_inbox --no-pipeline --expect-pages 20
 
+Với --expect-pages N: một (nguồn, ngày) phải có đủ trang 1..N mới được nạp.
+Thiếu trang thì cả nhóm đó ở lại inbox và lệnh thoát mã 1, tránh sinh tin "biến mất" giả.
 File nạp thành công được chuyển sang data/processed để không bị nạp hai lần.
 File lỗi ở nguyên trong inbox để bạn sửa rồi chạy lại.
 """
@@ -15,6 +18,7 @@ import argparse
 import logging
 import re
 import shutil
+from collections import defaultdict
 from datetime import date
 from pathlib import Path
 
@@ -69,9 +73,20 @@ def find_pending(inbox):
     return sorted(pending, key=lambda item: (item[2], item[1], item[3]))
 
 
+def incomplete_groups(pending, expect_pages):
+    """{(nguồn, ngày): [trang còn thiếu]} cho những nhóm không có đủ trang 1..expect_pages."""
+    pages = defaultdict(set)
+    for _, source, day, page in pending:
+        pages[(source, day)].add(page)
+    wanted = set(range(1, expect_pages + 1))
+    return {group: sorted(wanted - got) for group, got in pages.items() if not wanted <= got}
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Nạp trang đã lưu trong data/inbox")
     parser.add_argument("--no-pipeline", action="store_true", help="Chỉ nạp Bronze, không chạy ETL")
+    parser.add_argument("--expect-pages", type=int, metavar="N",
+                        help="Chỉ nạp (nguồn, ngày) có đủ trang 1..N")
     args = parser.parse_args(argv)
 
     INBOX.mkdir(parents=True, exist_ok=True)
@@ -81,8 +96,15 @@ def main(argv=None):
         log.info("Không có file hợp lệ trong %s", INBOX)
         return
 
+    incomplete = incomplete_groups(pending, args.expect_pages) if args.expect_pages else {}
+    for (source, day), missing in incomplete.items():
+        log.error("Thiếu trang %s của %s ngày %s: chưa nạp nhóm này, giữ nguyên trong inbox",
+                  missing, source, day)
+
     ingested = failed = 0
     for path, source, day, page in pending:
+        if (source, day) in incomplete:
+            continue
         log.info("Nạp %s (nguồn %s, ngày %s, trang %d)", path.name, source, day, page)
         try:
             collector.main(["--source", source, "--html-file", str(path),
@@ -95,10 +117,10 @@ def main(argv=None):
         shutil.move(str(path), str(PROCESSED / path.name))
         ingested += 1
 
-    log.info("Đã nạp %d file, %d file lỗi", ingested, failed)
+    log.info("Đã nạp %d file, %d file lỗi, %d nhóm thiếu trang", ingested, failed, len(incomplete))
     if ingested and not args.no_pipeline:
         run_pipeline.main([])
-    if failed:
+    if failed or incomplete:
         raise SystemExit(1)
 
 

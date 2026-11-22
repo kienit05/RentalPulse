@@ -30,6 +30,9 @@ x-airflow-common: &airflow-common
     - ./collectors:/opt/airflow/project/collectors:ro
     - ./storage:/opt/airflow/project/storage:ro
     - ./sql:/opt/airflow/project/sql:ro
+        # Landing zone: bạn thả trang đã lưu vào inbox, Airflow nạp rồi chuyển sang processed
+    - ./data/inbox:/opt/airflow/project/data/inbox
+    - ./data/processed:/opt/airflow/project/data/processed
   depends_on:
     airflow-db:
       condition: service_healthy

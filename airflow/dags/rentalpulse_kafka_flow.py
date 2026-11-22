@@ -22,7 +22,7 @@ with DAG(
     dag_id="rentalpulse_kafka_flow",
     description="Mock -> Bronze -> Kafka -> Raw -> Staging/Core -> price_changes + dbt",
     start_date=datetime(2026, 11, 21),
-    schedule="0 1 * * *",  # 01:00 UTC mỗi ngày = 08:00 sáng giờ Việt Nam
+    schedule="0 5 * * *",  # 05:00 UTC mỗi ngày = 12:00 trưa giờ Việt Nam
     catchup=False,
     max_active_runs=1,  # không cho hai lần chạy chồng nhau (tránh đua nhau ở dbt và ở next_mock_day)
     default_args=default_args,
@@ -43,6 +43,7 @@ with DAG(
     publish_batches = BashOperator(
         task_id="publish_new_batches",
         bash_command=f"cd {PROJECT_DIR} && python -m etl.publish_batch --only-new",
+        trigger_rule="all_done",  # chạy cả khi ingest_inbox báo thiếu trang
     )
 
     load_raw = BashOperator(
@@ -78,7 +79,13 @@ with DAG(
         trigger_rule="all_done",
     )
 
-    collect_mock >> publish_batches >> load_raw >> build_layers
+    ingest_real = BashOperator(
+        task_id="ingest_inbox",
+        # Nạp trang thật bạn đã lưu vào data/inbox; thiếu trang thì task đỏ, nhóm đó chờ lần sau
+        bash_command=f"cd {PROJECT_DIR} && python -m etl.ingest_inbox --no-pipeline --expect-pages 20",
+    )
+
+    [collect_mock, ingest_real] >> publish_batches >> load_raw >> build_layers
     # Sau khi Staging/Core xong, hai nhánh chạy song song: phát sự kiện đổi giá, và dbt
     build_layers >> [publish_price_changes, dbt_run]
     dbt_run >> dbt_test
