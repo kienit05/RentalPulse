@@ -30,8 +30,8 @@ NAME = re.compile(r"^(batdongsan|nhatot)_(\d{4}-\d{2}-\d{2})(?:_p([1-9]\d{0,2}))
 PAGE_URL = {
     "nhatot": ("https://www.nhatot.com/thue-phong-tro-ha-noi",
                "https://www.nhatot.com/thue-phong-tro-ha-noi?page={page}"),
-    "batdongsan": ("https://batdongsan.com.vn/cho-thue-nha-tro-phong-tro-ha-noi?sortValue=2",
-                   "https://batdongsan.com.vn/cho-thue-nha-tro-phong-tro-ha-noi/p{page}?sortValue=2"),
+    "batdongsan": ("https://batdongsan.com.vn/cho-thue-nha-tro-phong-tro-ha-noi?sortValue=8",
+                   "https://batdongsan.com.vn/cho-thue-nha-tro-phong-tro-ha-noi/p{page}?sortValue=8"),
 }
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")

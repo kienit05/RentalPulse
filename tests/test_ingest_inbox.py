@@ -24,7 +24,7 @@ def test_parse_name(name, expected):
 def test_page_url():
     assert ingest_inbox.page_url("nhatot", 1) == "https://www.nhatot.com/thue-phong-tro-ha-noi"
     assert ingest_inbox.page_url("nhatot", 3) == "https://www.nhatot.com/thue-phong-tro-ha-noi?page=3"
-    assert ingest_inbox.page_url("batdongsan", 2).endswith("/cho-thue-nha-tro-phong-tro-ha-noi/p2?sortValue=2")
+    assert ingest_inbox.page_url("batdongsan", 2).endswith("/cho-thue-nha-tro-phong-tro-ha-noi/p2?sortValue=8")
 
 
 @pytest.fixture

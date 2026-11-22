@@ -13,7 +13,7 @@ from storage.rustfs import ensure_bucket, get_bucket, get_client, put_json
 SOURCE = "mock"
 BATDONGSAN = "batdongsan"
 NHATOT = "nhatot"
-BATDONGSAN_LIST_URL = "https://batdongsan.com.vn/cho-thue-nha-tro-phong-tro"
+BATDONGSAN_LIST_URL = "https://batdongsan.com.vn/cho-thue-nha-tro-phong-tro-ha-noi?sortValue=8"
 NHATOT_LIST_URL = "https://www.nhatot.com/thue-phong-tro-ha-noi"
 VN_TZ = timezone(timedelta(hours=7))  # ngày dữ liệu tính theo giờ Việt Nam
 
