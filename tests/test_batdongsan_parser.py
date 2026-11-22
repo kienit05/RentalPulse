@@ -5,6 +5,7 @@ from collectors.batdongsan_parser import (
     parse_date,
     parse_list_page,
     parse_price,
+    parse_location,
 )
 
 
@@ -109,3 +110,29 @@ def test_date_found_in_both_html_shapes():
 def test_poster_id_is_never_collected():
     assert "999" not in str(parse_list_page(SAMPLE_PAGE))
     assert "uid" not in str(parse_list_page(SAMPLE_PAGE))
+
+@pytest.mark.parametrize("text, expected", [
+    ("Q. Nam Từ Liêm (P. Đại Mỗ mới)", (None, "Q. Nam Từ Liêm", "P. Đại Mỗ")),
+    ("H. Đông Anh (X. Thiên Lộc mới)", (None, "H. Đông Anh", "X. Thiên Lộc")),
+    ("Q. Hoàng Mai", (None, "Q. Hoàng Mai", None)),
+    ("TX. Sơn Tây", (None, "TX. Sơn Tây", None)),
+    ("  Q.  Cầu   Giấy ", (None, "Q. Cầu Giấy", None)),
+    ("Hà Nội", ("Hà Nội", None, None)),
+    ("", (None, None, None)),
+    (None, (None, None, None)),
+])
+def test_parse_location(text, expected):
+    assert parse_location(text) == expected
+
+
+HANOI_CARD = """
+<div class="js__card js__card-full-web re__card-full" prid="3001">
+  <span class="js__card-title">Phòng C</span>
+  <div class="re__card-location"><span class="re__card-config-dot">·</span><span>Q. Đống Đa (P. Kim Liên mới)</span></div>
+</div>
+"""
+
+
+def test_card_on_hanoi_page_has_district_and_ward():
+    c = parse_list_page(HANOI_CARD)[0]
+    assert (c["province_raw"], c["district_raw"], c["ward_raw"]) == (None, "Q. Đống Đa", "P. Kim Liên")
