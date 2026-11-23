@@ -2,7 +2,6 @@
 
 Data pipeline theo dõi tin cho thuê phòng trọ ở Hà Nội: thu thập, lưu trữ, làm sạch, theo dõi biến động giá và vòng đời tin đăng, rồi đưa lên dashboard. Toàn bộ hệ thống chạy trên máy cá nhân bằng Docker Compose.
 
-> **Lưu ý:** Đây là dự án học tập và portfolio Data Engineering, không có mục đích thương mại. Dữ liệu thô không được đưa lên GitHub.
 
 ---
 
