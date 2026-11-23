@@ -9,5 +9,3 @@ dbt/dbt_packages/
 .vscode/
 dbt/logs/
 dbt/.user.yml
-scripts/fetch_scrapedo.py
-scripts/test_scrapedo.py

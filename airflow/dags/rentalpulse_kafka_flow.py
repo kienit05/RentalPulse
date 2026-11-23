@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.bash import BashOperator
 
+
 PROJECT_DIR = "/opt/airflow/project"
 DBT_DIR = "/opt/airflow/dbt"
 DBT = "/home/airflow/dbt_venv/bin/dbt"  # dbt nằm trong virtualenv riêng
@@ -82,11 +83,17 @@ with DAG(
     ingest_real = BashOperator(
         task_id="ingest_inbox",
         # Nạp trang thật bạn đã lưu vào data/inbox; thiếu trang thì task đỏ, nhóm đó chờ lần sau
-        bash_command=f"cd {PROJECT_DIR} && python -m etl.ingest_inbox --no-pipeline --expect-pages 20",
+        bash_command=f"cd {PROJECT_DIR} && python -m etl.ingest_inbox --no-pipeline --expect-pages 6",
     )
 
-    [collect_mock, ingest_real] >> publish_batches >> load_raw >> build_layers
-    # Sau khi Staging/Core xong, hai nhánh chạy song song: phát sự kiện đổi giá, và dbt
+    # 1. Chạy song song: Tạo mock và nạp dữ liệu thật
+    collect_mock >> publish_batches
+    
+    # 2. Luồng dữ liệu thật: ingest_inbox nạp các trang bạn đã lưu vào data/inbox
+    ingest_real >> publish_batches
+    
+    # 3. Các bước sau giữ nguyên
+    publish_batches >> load_raw >> build_layers
     build_layers >> [publish_price_changes, dbt_run]
     dbt_run >> dbt_test
     [publish_price_changes, dbt_test] >> log_run

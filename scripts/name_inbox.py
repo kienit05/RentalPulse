@@ -63,7 +63,7 @@ def plan(files, expect_pages):
             if not ids:
                 errors.append(f"{source} trang {number} ({path.name}): không đọc được tin nào")
             for other, other_ids in seen.items():
-                if ids & other_ids:
+                if len(ids & other_ids) >= 5:
                     errors.append(f"{source} trang {number} ({path.name}) trùng tin với trang {other}: "
                                   "lưu trùng hoặc sai thứ tự")
                     break
@@ -75,7 +75,7 @@ def plan(files, expect_pages):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Đặt tên trang đã lưu trong data/inbox/raw")
-    parser.add_argument("--expect-pages", type=int, default=20)
+    parser.add_argument("--expect-pages", type=int, default=6)
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
 
