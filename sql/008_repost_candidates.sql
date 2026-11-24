@@ -43,5 +43,6 @@ WHERE a.address_key IS NOT NULL
   AND a.address_key   = b.address_key
   AND a.district_norm IS NOT DISTINCT FROM b.district_norm
   AND a.property_type IS NOT DISTINCT FROM b.property_type
-  AND a.area_m2       IS NOT DISTINCT FROM b.area_m2;
+  -- thiếu diện tích ở một bên nghĩa là "chưa biết", không phải "khác nhau"
+  AND (a.area_m2 IS NULL OR b.area_m2 IS NULL OR a.area_m2 = b.area_m2);
   

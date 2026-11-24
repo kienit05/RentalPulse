@@ -51,10 +51,19 @@ def test_wrong_page_count_is_rejected(tmp_path):
 
 
 def test_same_page_saved_twice_is_rejected(tmp_path):
-    files = [save(tmp_path, "a.html", nhatot_page([1, 2]), T0), save(tmp_path, "b.html", nhatot_page([2, 3]), T0 + 1)]
+    # hai trang chung 7 tin (ngưỡng phát hiện lưu trùng là từ 5 tin trở lên)
+    files = [save(tmp_path, "a.html", nhatot_page(range(1, 11)), T0),
+             save(tmp_path, "b.html", nhatot_page(range(4, 14)), T0 + 1)]
     _, errors = name_inbox.plan(files, 2)
     assert any("trùng tin" in e for e in errors)
 
+
+def test_pages_sharing_few_listings_are_not_flagged(tmp_path):
+    # hai trang liền nhau của web thật vẫn có thể trùng vài tin vì tin mới đẩy danh sách xuống
+    files = [save(tmp_path, "a.html", nhatot_page(range(1, 11)), T0),
+             save(tmp_path, "b.html", nhatot_page(range(9, 19)), T0 + 1)]
+    _, errors = name_inbox.plan(files, 2)
+    assert errors == []
 
 def test_unknown_page_is_rejected(tmp_path):
     _, errors = name_inbox.plan([save(tmp_path, "x.html", "<html>hello</html>", T0)], 1)

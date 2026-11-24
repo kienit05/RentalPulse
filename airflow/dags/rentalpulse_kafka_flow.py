@@ -84,10 +84,19 @@ with DAG(
         task_id="ingest_inbox",
         # Nạp trang thật bạn đã lưu vào data/inbox; thiếu trang thì task đỏ, nhóm đó chờ lần sau
         bash_command=f"cd {PROJECT_DIR} && python -m etl.ingest_inbox --no-pipeline --expect-pages 6",
+        trigger_rule="all_done",
+    )
+
+    name_inbox = BashOperator(
+        task_id="name_inbox",
+        # Nhận diện thứ tự trang trong data/inbox/raw, đặt tên rồi chuyển vào data/inbox
+        bash_command=f"cd {PROJECT_DIR} && TZ=Asia/Ho_Chi_Minh python -m scripts.name_inbox",
     )
 
     # 1. Chạy song song: Tạo mock và nạp dữ liệu thật
     collect_mock >> publish_batches
+
+    name_inbox >> ingest_real
     
     # 2. Luồng dữ liệu thật: ingest_inbox nạp các trang bạn đã lưu vào data/inbox
     ingest_real >> publish_batches
