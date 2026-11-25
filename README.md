@@ -43,22 +43,7 @@ RentalPulse trả lời các câu hỏi:
 
 ## 3. Kiến trúc
 
-```mermaid
-flowchart TD
-    A["Nhà Tốt, Batdongsan<br/>(trang HTML trong data/inbox)"] --> C["Python collector + parser"]
-    B["Mock<br/>(sinh theo ngày)"] --> C
-    C --> D["Bronze: RustFS<br/>JSON chỉ ghi thêm"]
-    D --> E["Kafka: listing.events"]
-    E -- "event hỏng" --> F["listing.events.dlq"]
-    E --> G["PostgreSQL raw.listings<br/>JSONB nguyên văn"]
-    G --> H["staging.listings<br/>ép kiểu, chuẩn hóa, loại trùng"]
-    H --> I["core.*<br/>mỗi tin mỗi ngày một dòng"]
-    I --> J["Kafka: listing.price_changes"]
-    I --> K["dbt → analytics.*<br/>mart + test"]
-    K --> L["Power BI"]
-    M["Airflow<br/>12:00 mỗi ngày"] -. "điều phối" .-> C
-    M -.-> K
-```
+![Kiến trúc RentalPulse](docs/images/architecture.png)
 
 **Nguyên tắc thiết kế**
 
