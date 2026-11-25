@@ -21,25 +21,14 @@ default_args = {
 
 with DAG(
     dag_id="rentalpulse_kafka_flow",
-    description="Mock -> Bronze -> Kafka -> Raw -> Staging/Core -> price_changes + dbt",
+    description="Inbox -> Bronze -> Kafka -> Raw -> Staging/Core -> price_changes + dbt",
     start_date=datetime(2026, 11, 21),
     schedule="0 5 * * *",  # 05:00 UTC mỗi ngày = 12:00 trưa giờ Việt Nam
     catchup=False,
-    max_active_runs=1,  # không cho hai lần chạy chồng nhau (tránh đua nhau ở dbt và ở next_mock_day)
+    max_active_runs=1,  # không cho hai lần chạy chồng nhau (tránh đua nhau ở dbt)
     default_args=default_args,
     tags=["rentalpulse"],
 ) as dag:
-
-    collect_mock = BashOperator(
-        task_id="collect_mock",
-        # Hỏi DB xem mock đã tới ngày nào, rồi thu thập ngày kế tiếp
-        bash_command=(
-            f"cd {PROJECT_DIR} && "
-            "DAY=$(python -m etl.next_mock_day) && "
-            'echo "Thu thập mock ngày $DAY" && '
-            "python -m collectors.collector --day $DAY"
-        ),
-    )
 
     publish_batches = BashOperator(
         task_id="publish_new_batches",
@@ -61,6 +50,11 @@ with DAG(
         task_id="publish_price_changes",
         # Đã có sổ analytics.published_events nên chỉ phát event chưa từng phát
         bash_command=f"cd {PROJECT_DIR} && python -m etl.publish_price_changes",
+    )
+
+    consume_price_changes = BashOperator(
+        task_id="consume_price_changes",
+        bash_command=f"cd {PROJECT_DIR} && python -m etl.consume_price_changes --once",
     )
 
     dbt_run = BashOperator(
@@ -99,18 +93,14 @@ with DAG(
         bash_command=f"cd {PROJECT_DIR} && TZ=Asia/Ho_Chi_Minh python -m scripts.name_inbox",
     )
 
-    # 1. Chạy song song: Tạo mock và nạp dữ liệu thật
-    collect_mock >> publish_batches
+    # 1. Luồng dữ liệu thật: đặt tên trang đã lưu, rồi nạp vào Bronze
+    name_inbox >> ingest_real >> publish_batches
 
-    name_inbox >> ingest_real
-    
-    # 2. Luồng dữ liệu thật: ingest_inbox nạp các trang bạn đã lưu vào data/inbox
-    ingest_real >> publish_batches
-    
-    # 3. Các bước sau giữ nguyên
+    # 2. Các bước sau
     publish_batches >> load_raw >> build_layers
     build_layers >> [publish_price_changes, dbt_run]
     dbt_run >> dbt_test
-    [publish_price_changes, dbt_test] >> log_run
+    publish_price_changes >> consume_price_changes
+    [consume_price_changes, dbt_test] >> log_run
 
     log_run >> check_fresh
