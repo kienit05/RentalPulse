@@ -80,6 +80,12 @@ with DAG(
         trigger_rule="all_done",
     )
 
+    check_fresh = BashOperator(
+        task_id="check_freshness",
+        bash_command=f"cd {PROJECT_DIR} && python -m etl.check_freshness",
+        trigger_rule="all_done",
+    )
+
     ingest_real = BashOperator(
         task_id="ingest_inbox",
         # Nạp trang thật bạn đã lưu vào data/inbox; thiếu trang thì task đỏ, nhóm đó chờ lần sau
@@ -106,3 +112,5 @@ with DAG(
     build_layers >> [publish_price_changes, dbt_run]
     dbt_run >> dbt_test
     [publish_price_changes, dbt_test] >> log_run
+
+    log_run >> check_fresh
