@@ -28,6 +28,7 @@ x-airflow-common: &airflow-common
     # Mã nguồn dự án, chỉ đọc. Không mount .env, .venv hay data/.
     - ./etl:/opt/airflow/project/etl:ro
     - ./collectors:/opt/airflow/project/collectors:ro
+    - ./scripts:/opt/airflow/project/scripts:ro
     - ./storage:/opt/airflow/project/storage:ro
     - ./sql:/opt/airflow/project/sql:ro
         # Landing zone: bạn thả trang đã lưu vào inbox, Airflow nạp rồi chuyển sang processed
