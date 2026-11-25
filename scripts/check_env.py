@@ -51,8 +51,8 @@ def check_object_storage():
 
 def check_kafka():
     from confluent_kafka.admin import AdminClient, NewTopic
-    admin = AdminClient({"bootstrap.servers": os.getenv("KAFKA_BOOTSTRAP_SERVERS")})
-    topic = os.getenv("KAFKA_TOPIC")
+    admin = AdminClient({"bootstrap.servers": os.getenv("KAFKA_BOOTSTRAP") or os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:29092")})
+    topic = os.getenv("KAFKA_TOPIC_LISTINGS") or os.getenv("KAFKA_TOPIC", "listing.events")
     md = admin.list_topics(timeout=10)
     if topic not in md.topics:
         admin.create_topics([NewTopic(topic, num_partitions=3, replication_factor=1)])[topic].result()
