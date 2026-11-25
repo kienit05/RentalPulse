@@ -28,7 +28,9 @@ DDL_FILES = [
     "009_published_events.sql",
     "010_data_quality_view.sql",
     "011_repost_eval.sql",
-    "012_pipeline_runs.sql"
+    "012_pipeline_runs.sql",
+    "013_price_change_events.sql",
+    "014_cross_source_matches.sql",
 ]
 # Nạp dữ liệu: raw -> staging -> core.
 LOAD_FILES = [
