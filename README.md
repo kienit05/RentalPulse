@@ -21,8 +21,8 @@ RentalPulse trả lời các câu hỏi:
 - **Streaming:** Kafka cho event tin đăng, DLQ cho event hỏng, topic riêng cho event đổi giá.
 - **Lịch sử và vòng đời:** lịch sử giá theo ngày, tin mới / biến mất / quay lại, ứng viên tin đăng lại.
 - **Biến đổi và kiểm thử dữ liệu:** dbt dựng 2 mart và chạy 7 test dữ liệu.
-- **Điều phối:** Airflow chạy toàn bộ luồng mỗi ngày lúc 12:00, có cổng kiểm tra đủ trang và run-log.
-- **Chất lượng:** 132 test pytest, view theo dõi tỉ lệ thiếu dữ liệu theo ngày.
+- **Điều phối:** Airflow chạy toàn bộ luồng mỗi ngày lúc 12:00, có cổng kiểm tra đủ trang, run-log và kiểm tra độ mới của dữ liệu.
+- **Chất lượng:** 200 test pytest (41 test tích hợp cần Docker), view theo dõi tỉ lệ thiếu dữ liệu theo ngày.
 
 ---
 
@@ -73,12 +73,10 @@ RentalPulse/
 ├── etl/                        # nạp inbox, Raw, pipeline, Kafka, event đổi giá, run-log
 ├── scripts/
 │   ├── check_env.py            # kiểm tra kết nối Postgres, RustFS, Kafka
-│   ├── fetch_scrapedo.py
-│   ├── name_inbox.py           # tự đặt tên trang đã lưu
-│   └── test_scrapedo.py
+│   └── name_inbox.py           # tự đặt tên trang đã lưu
 ├── sql/                        # 13 file: schema, hàm chuẩn hóa, Staging/Core, view
 ├── storage/                    # client RustFS (boto3)
-├── tests/                      # 132 test: đơn vị, kịch bản mock, tích hợp PostgreSQL
+├── tests/                      # 200 test: đơn vị, kịch bản mock, tích hợp PostgreSQL
 ├── docker-compose.yml
 ├── requirements.txt
 └── requirements-dev.txt
@@ -167,15 +165,15 @@ Lệnh tạo schema, bảng, hàm, view. Chạy lại an toàn; cần chạy l�
 
 | Nguồn | Loại | Cách lấy |
 |---|---|---|
-| Nhà Tốt | Thật, công khai | HTML trang danh sách thuê phòng trọ Hà Nội, 20 trang/ngày |
-| Batdongsan | Thật, công khai | HTML trang danh sách phòng trọ Hà Nội, sắp theo tin mới nhất, 20 trang/ngày |
+| Nhà Tốt | Thật, công khai | HTML trang danh sách thuê phòng trọ Hà Nội, 6 trang/ngày |
+| Batdongsan | Thật, công khai | HTML trang danh sách phòng trọ Hà Nội, sắp theo tin mới nhất, 6 trang/ngày |
 | Mock | Mô phỏng, có đáp án | Sinh theo ngày, dùng để kiểm thử |
 
 Chi tiết từng nguồn trong [docs/data-sources.md](docs/data-sources.md).
 
 **Mỗi ngày**
 
-1. Trang HTML của mỗi nguồn (20 trang) nằm trong `data/inbox/` trước 12:00. Trang lưu tay với tên là số trang có thể để trong `data/inbox/raw/` rồi chạy `python -m scripts.name_inbox` để tự đặt tên.
+1. Lưu 6 trang HTML của mỗi nguồn vào `data/inbox/raw/` trước 12:00. DAG tự chạy `name_inbox` để đặt tên và chuyển vào `data/inbox/`, rồi `ingest_inbox` nạp vào Bronze. Cũng có thể chạy tay `python -m scripts.name_inbox`.
 2. 12:00, DAG `rentalpulse_kafka_flow` tự chạy:
 
 | Thứ tự | Task | Việc làm |
@@ -187,8 +185,23 @@ Chi tiết từng nguồn trong [docs/data-sources.md](docs/data-sources.md).
 | 4 | `build_staging_and_core` | Raw → Staging → Core |
 | 5 | `publish_price_changes` · `dbt_run` → `dbt_test` | Phát event đổi giá; dựng và kiểm thử mart |
 | 6 | `log_pipeline_run` | Ghi `analytics.pipeline_runs`, chạy cả khi bước trước lỗi |
+| 7 | `check_freshness` | Báo đỏ nếu một nguồn thật chưa có dữ liệu của ngày hôm nay |
 
 3. Mở Airflow kiểm tra, rồi Refresh Power BI.
+
+**Dashboard Power BI** (file `docs/powerbi/rentalpulse.pbix`, 3 trang, chỉ hiện dữ liệu thật)
+
+Tổng quan: số tin đang hoạt động, tin mới, tin biến mất, tin đổi giá theo ngày.
+
+![Dashboard trang 1: Tổng quan](docs/images/dashboard-1-overview.png)
+
+Giá theo quận: giá trung vị và trung bình theo quận, so hai nguồn theo ngày.
+
+![Dashboard trang 2: Giá theo quận](docs/images/dashboard-2-price-by-district.png)
+
+Vận hành pipeline: run-log, số dòng mỗi tầng, tỉ lệ thiếu dữ liệu, tin trong DLQ.
+
+![Dashboard trang 3: Vận hành pipeline](docs/images/dashboard-3-pipeline-health.png)
 
 ---
 
@@ -216,7 +229,7 @@ Chi tiết từng nguồn trong [docs/data-sources.md](docs/data-sources.md).
 **Kiểm thử**
 
 ```powershell
-python -m pytest -q                         # 132 test
+python -m pytest -q                         # 200 test (41 cần Docker)
 cd dbt; dbt test --profiles-dir .; cd ..    # 7 test dữ liệu
 ```
 
@@ -224,17 +237,19 @@ cd dbt; dbt test --profiles-dir .; cd ..    # 7 test dữ liệu
 
 ## 8. Hướng phát triển
 
-- [ ] Hoàn thiện dashboard Power BI: tổng quan dòng chảy tin, giá theo quận, sức khỏe pipeline.
+- [x] Hoàn thiện dashboard Power BI: tổng quan, giá theo quận, vận hành pipeline.
 - [ ] Ghép tin giữa hai nguồn (cùng một phòng đăng trên cả Nhà Tốt và Batdongsan).
-- [ ] Bổ sung ảnh dashboard và ảnh DAG vào README.
+- [x] Bổ sung ảnh kiến trúc và ảnh dashboard vào README.
+- [ ] Bổ sung ảnh giao diện Airflow (DAG) vào README.
+- [ ] Thêm consumer đọc topic `listing.price_changes`.
 
 ---
 
 ## 9. Giới hạn hiện tại
 
 - Dữ liệu thật mới thu thập hằng ngày từ 23/11/2026, nên lịch sử giá thật còn ngắn.
-- Mỗi nguồn chỉ lưu khoảng 400 tin mới nhất mỗi ngày, không phải toàn bộ thị trường. "Biến mất" nghĩa là tin đã rơi khỏi khoảng đó, không chắc đã cho thuê xong.
-- Test `test_recall_does_not_drop` đang fail: bộ ghép tin đăng lại bỏ sót 2/8 cặp trên dữ liệu mock.
+- Mỗi nguồn chỉ lưu khoảng 120 tin mới nhất mỗi ngày (6 trang × 20 tin), không phải toàn bộ thị trường. "Biến mất" nghĩa là tin đã rơi khỏi khoảng đó, không chắc đã cho thuê xong.
+- Dữ liệu thật được lưu tay mỗi ngày, chưa tự động hóa việc thu thập trang HTML.
 
 ---
 
