@@ -6,7 +6,7 @@ Mọi lệnh chạy trong PowerShell tại **thư mục gốc của repo** (thư
 
 ## Việc hằng ngày (khi hệ thống đã chạy)
 
-1. Lưu đủ 20 trang mỗi web vào `data/inbox/` **trước 12:00 trưa** (xem Bước 2).
+1. Lưu đủ 6 trang mỗi web vào `data/inbox/raw/` **trước 12:00 trưa** (xem Bước 2).
 2. 12:00, Airflow tự chạy toàn bộ phần còn lại.
 3. Mở Airflow (http://localhost:8081) xem mọi task xanh, rồi Refresh Power BI.
 
@@ -72,7 +72,7 @@ Mở từng trang, Ctrl+S, chọn **"Webpage, HTML Only"**, lưu vào `data/inbo
 
 Nguyên tắc giữ dữ liệu sạch:
 
-- Mỗi ngày đủ 20 trang mỗi nguồn, cùng thứ tự sắp xếp. Thiếu trang thì nhóm đó không được nạp (Bước 3).
+- Mỗi ngày đủ 6 trang mỗi nguồn, cùng thứ tự sắp xếp. Thiếu trang thì nhóm đó không được nạp (Bước 3).
 - Lưu cả 40 trang trong một lần ngồi, vì tin mới liên tục đẩy tin cũ sang trang sau.
 - "Biến mất" trên dashboard nghĩa là tin đã rơi khỏi khoảng 400 tin mới nhất của nguồn,
   không chắc là đã cho thuê xong.
@@ -84,14 +84,14 @@ mỗi lần một run (`max_active_runs=1`), thử lại 1 lần sau 2 phút.
 
 | Thứ tự | Task | Việc làm |
 | --- | --- | --- |
-| 1 | `collect_mock` | Sinh một ngày dữ liệu mock (dùng cho test, lọc khỏi dashboard) |
-| 1 | `ingest_inbox` | Nạp trang thật trong `data/inbox/` vào Bronze; mỗi (nguồn, ngày) phải đủ 20 trang |
+| 1 | `name_inbox` → `ingest_inbox` | Đặt tên trang trong `data/inbox/raw/`, rồi nạp vào Bronze; mỗi (nguồn, ngày) phải đủ 6 trang |
 | 2 | `publish_new_batches` | Bronze → Kafka `listing.events`, chỉ batch mới; chạy cả khi bước 1 báo lỗi |
 | 3 | `consume_into_raw` | Kafka → `raw.listings` (message lỗi vào `listing.events.dlq`) |
 | 4 | `build_staging_and_core` | Raw → Staging → Core |
 | 5 | `publish_price_changes` | Phát event đổi giá lên `listing.price_changes` |
 | 5 | `dbt_run` → `dbt_test` | Dựng và kiểm thử các mart trong schema `analytics` |
 | 6 | `log_pipeline_run` | Ghi `analytics.pipeline_runs`, chạy cả khi bước trước lỗi |
+| 7 | `check_freshness` | Báo đỏ nếu thiếu dữ liệu ngày hôm nay (bắt lỗi "xanh mà không nạp") |
 
 Cổng đủ trang: nếu một nguồn trong ngày thiếu trang, `ingest_inbox` chuyển đỏ và ghi rõ trang nào thiếu;
 các file của nhóm đó nằm lại `data/inbox/`. Lưu bổ sung trang thiếu rồi chạy lại. File nạp xong chuyển
@@ -135,7 +135,7 @@ SELECT * FROM analytics.v_data_quality_daily ORDER BY snapshot_date DESC, source
 SELECT * FROM analytics.mart_daily_listing_flow ORDER BY snapshot_date DESC LIMIT 10;
 ```
 
-- Mỗi nguồn thật một ngày nên có khoảng 400 tin (20 trang × 20 tin). Ít hơn nhiều nghĩa là
+- Mỗi nguồn thật một ngày nên có khoảng 120 tin (6 trang × 20 tin). Ít hơn nhiều nghĩa là
   thiếu trang hoặc lưu nhầm danh mục.
 - Kafka UI (http://localhost:8080): topic `listing.events.dlq` không có message mới.
 - `test_recall_does_not_drop` đang fail từ trước (recall ghép tin đăng lại trên dữ liệu mock), chưa sửa.
@@ -152,11 +152,13 @@ hiện dữ liệu thật. Ghi nguồn "Batdongsan.com.vn" và "Nhà Tốt" trê
 | --- | --- | --- |
 | `relation analytics.… does not exist` | File SQL mới chưa chạy DDL | `python -m etl.run_pipeline --skip-bronze --init` |
 | DAG không hiện trong Airflow | Lỗi Python trong file DAG | `airflow dags list-import-errors` (lệnh ở Bước 1) |
-| `ingest_inbox` đỏ, log "Thiếu trang …" | Chưa đủ 20 trang một nguồn | Lưu bổ sung trang thiếu, trigger lại DAG |
+| `ingest_inbox` đỏ, log "Thiếu trang …" | Chưa đủ 6 trang một nguồn | Lưu bổ sung trang thiếu, trigger lại DAG |
 | `Không có file hợp lệ trong …inbox` | Chưa lưu trang hoặc sai tên file | Đặt tên `<nguồn>_<YYYY-MM-DD>[_pN].html` |
 | dbt báo `__dbt_backup already exists` | Hai lần `dbt run` chạy cùng lúc | Đợi run kia xong; DAG đã đặt `max_active_runs=1` |
 | Batdongsan ra tin văn phòng, kho | Lưu nhầm danh mục "nhà đất cho thuê" | Dùng link `cho-thue-nha-tro-phong-tro-ha-noi?sortValue=8` |
 | Power BI không kết nối được | Container Postgres chưa chạy | `docker compose ps`, rồi `docker compose up -d postgres` |
+| `name_inbox` đỏ, báo không thấy module `scripts` | Thư mục `scripts/` chưa được mount vào container Airflow | Kiểm tra volume `./scripts` trong `docker-compose.yml`, rồi `docker compose up -d` |
+| DAG xanh nhưng không có dữ liệu mới | Trang chưa nằm trong `data/inbox/raw/` nên không có gì để nạp | Xem task `check_freshness`: đỏ nghĩa là thiếu dữ liệu hôm nay |
 
 ## Tắt hệ thống
 
