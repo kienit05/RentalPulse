@@ -43,7 +43,7 @@ RentalPulse trả lời các câu hỏi:
 
 ## 3. Kiến trúc
 
-![Kiến trúc RentalPulse](docs/images/architecture.png)
+![Kiến trúc RentalPulse](docs/images/architecture-diagram.png)
 
 **Nguyên tắc thiết kế**
 
