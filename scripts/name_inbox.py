@@ -4,7 +4,7 @@ Lưu các trang vào data/inbox/raw/ theo ĐÚNG THỨ TỰ trang 1, 2, 3, ... c
 Script nhận ra nguồn từ nội dung trang, đánh số trang theo thời gian lưu, lấy ngày từ
 trang 1 (giờ Việt Nam), rồi chuyển sang data/inbox/ với tên đúng quy ước.
 
-    python -m scripts.name_inbox --expect-pages 20
+    python -m scripts.name_inbox --expect-pages 6
 
 Dừng, không đổi tên gì, nếu: không nhận ra nguồn, thiếu trang, thừa trang, hoặc hai
 trang chứa cùng một tin (nghĩa là lưu trùng hoặc sai thứ tự).
