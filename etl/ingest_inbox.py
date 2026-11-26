@@ -7,7 +7,7 @@ Nguồn là batdongsan hoặc nhatot; ngày là ngày bạn lưu trang.
 
     python -m etl.ingest_inbox                                # nạp mọi file rồi chạy ETL
     python -m etl.ingest_inbox --no-pipeline                  # chỉ nạp Bronze (Airflow dùng cách này)
-    python -m etl.ingest_inbox --no-pipeline --expect-pages 20
+    python -m etl.ingest_inbox --no-pipeline --expect-pages 6
 
 Với --expect-pages N: một (nguồn, ngày) phải có đủ trang 1..N mới được nạp.
 Thiếu trang thì cả nhóm đó ở lại inbox và lệnh thoát mã 1, tránh sinh tin "biến mất" giả.
