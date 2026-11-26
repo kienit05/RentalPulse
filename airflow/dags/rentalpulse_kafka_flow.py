@@ -8,6 +8,8 @@ from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.bash import BashOperator
 
+from airflow.exceptions import AirflowFailException
+from airflow.operators.python import PythonOperator
 
 PROJECT_DIR = "/opt/airflow/project"
 DBT_DIR = "/opt/airflow/dbt"
@@ -18,6 +20,17 @@ default_args = {
     "retries": 1,
     "retry_delay": timedelta(minutes=2),
 }
+
+def assert_run_ok(**context):
+    """Task cuối: đỏ nếu bất kỳ task nào khác trong lần chạy này đã lỗi."""
+    me = context["ti"].task_id
+    bad = sorted(
+        ti.task_id
+        for ti in context["dag_run"].get_task_instances()
+        if ti.task_id != me and ti.state in ("failed", "upstream_failed")
+    )
+    if bad:
+        raise AirflowFailException("Task lỗi: " + ", ".join(bad))
 
 with DAG(
     dag_id="rentalpulse_kafka_flow",
@@ -80,6 +93,12 @@ with DAG(
         trigger_rule="all_done",
     )
 
+    verdict = PythonOperator(
+        task_id="pipeline_verdict",
+        python_callable=assert_run_ok,
+        trigger_rule="all_done",
+    )
+
     ingest_real = BashOperator(
         task_id="ingest_inbox",
         # Nạp trang thật bạn đã lưu vào data/inbox; thiếu trang thì task đỏ, nhóm đó chờ lần sau
@@ -103,4 +122,4 @@ with DAG(
     publish_price_changes >> consume_price_changes
     [consume_price_changes, dbt_test] >> log_run
 
-    log_run >> check_fresh
+    log_run >> check_fresh >> verdict
