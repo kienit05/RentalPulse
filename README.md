@@ -16,13 +16,13 @@ RentalPulse trả lời các câu hỏi:
 
 **Tính năng đã làm**
 
-- **Thu thập:** parser cho Nhà Tốt (đọc khối `__NEXT_DATA__`) và Batdongsan (tách quận, phường), cùng nguồn mock có kịch bản và đáp án biết trước.
+- **Thu thập (bán tự động):** trang HTML được lưu tay mỗi ngày; parser cho Nhà Tốt (đọc khối `__NEXT_DATA__`) và Batdongsan (tách quận, phường), cùng nguồn mock có kịch bản và đáp án biết trước.
 - **Lưu trữ nhiều tầng:** Bronze (RustFS) → Raw → Staging → Core → Analytics. Mọi bước nạp đều idempotent.
 - **Streaming:** Kafka cho event tin đăng, DLQ cho event hỏng, topic riêng cho event đổi giá, có consumer ghi event đổi giá vào `analytics.price_change_events`.
 - **Lịch sử và vòng đời:** lịch sử giá theo ngày, tin mới / biến mất / quay lại, ứng viên tin đăng lại trong cùng một nguồn.
 - **Loại trùng giữa hai nguồn:** ghép tin Nhà Tốt và Batdongsan theo quận, diện tích, giá và độ giống tiêu đề (`pg_trgm`), chỉ nhận cặp duy nhất.
 - **Biến đổi và kiểm thử dữ liệu:** dbt dựng 2 mart và chạy 7 test dữ liệu.
-- **Điều phối:** Airflow chạy toàn bộ luồng mỗi ngày lúc 12:00, có cổng kiểm tra đủ trang, run-log và kiểm tra độ mới của dữ liệu.
+- **Điều phối:** Airflow chạy toàn bộ luồng mỗi ngày lúc 12:00, có cổng kiểm tra đủ trang, run-log, kiểm tra độ mới của dữ liệu và một task cuối báo đỏ nếu bất kỳ bước nào lỗi.
 - **Chất lượng:** hơn 200 test pytest (41 test tích hợp cần Docker), view theo dõi tỉ lệ thiếu dữ liệu theo ngày.
 
 ---
@@ -169,6 +169,15 @@ Lệnh tạo schema, bảng, hàm, view. Chạy lại an toàn; cần chạy l�
 
 ## 6. Nguồn dữ liệu và vận hành hằng ngày
 
+**Mức tự động hóa hiện tại**
+
+| Mức | Trạng thái |
+|---|---|
+| ETL tự động (nạp idempotent, dựng lại được từ Raw) | Đã có |
+| Điều phối tự động (DAG chạy theo lịch, run-log, kiểm tra độ mới) | Đã có |
+| Thu thập dữ liệu tự động | Chưa: trang HTML được lưu tay mỗi ngày |
+| Vận hành liên tục đáng tin cậy | Chưa chứng minh: dữ liệu thật mới có từ 23/11, cần chạy nhiều ngày |
+
 | Nguồn | Loại | Cách lấy |
 |---|---|---|
 | Nhà Tốt | Thật, công khai | HTML trang danh sách thuê phòng trọ Hà Nội, 6 trang/ngày |
@@ -192,6 +201,7 @@ Chi tiết từng nguồn trong [docs/data-sources.md](docs/data-sources.md).
 | 5 | `dbt_run` → `dbt_test` | Dựng và kiểm thử mart |
 | 6 | `log_pipeline_run` | Ghi `analytics.pipeline_runs`, chạy cả khi bước trước lỗi |
 | 7 | `check_freshness` | Báo đỏ nếu một nguồn thật chưa có dữ liệu của ngày hôm nay |
+| 8 | `pipeline_verdict` | Task cuối: đỏ nếu bất kỳ task nào trước đó đã lỗi, để trạng thái cả lần chạy phản ánh đúng |
 
 3. Mở Airflow kiểm tra, rồi Refresh Power BI.
 
@@ -261,6 +271,8 @@ cd dbt; dbt test --profiles-dir .; cd ..    # 7 test dữ liệu
 - [x] Bổ sung ảnh giao diện Airflow (DAG) vào README.
 - [ ] Thêm thẻ "số phòng sau khi loại trùng" vào dashboard từ `analytics.v_dedup_summary`.
 - [ ] Thêm test cho `v_cross_source_matches` và `check_freshness`.
+- [ ] Tự động hóa thu thập trang (cần xem điều khoản của từng nguồn trước).
+- [ ] Chụp lại ảnh Airflow có task `pipeline_verdict` và ghi số ngày vận hành liên tục.
 
 ---
 
@@ -268,7 +280,8 @@ cd dbt; dbt test --profiles-dir .; cd ..    # 7 test dữ liệu
 
 - Dữ liệu thật mới thu thập hằng ngày từ 23/11/2026, nên lịch sử giá thật còn ngắn.
 - Mỗi nguồn chỉ lưu khoảng 120 tin mới nhất mỗi ngày (6 trang × 20 tin), không phải toàn bộ thị trường. "Biến mất" nghĩa là tin đã rơi khỏi khoảng đó, không chắc đã cho thuê xong.
-- Dữ liệu thật được lưu tay mỗi ngày, chưa tự động hóa việc thu thập trang HTML.
+- Dữ liệu thật được lưu tay mỗi ngày, chưa tự động hóa việc thu thập trang HTML. Airflow tự động hóa phần xử lý sau khi nhận đầu vào, chưa tự động hóa việc lấy đầu vào.
+- Chưa có chuỗi nhiều ngày liên tiếp đủ dài để chứng minh vận hành ổn định; mỗi lần chạy được ghi trong `analytics.pipeline_runs`.
 - Ghép tin giữa hai nguồn là luật đoán. Ngưỡng độ giống tiêu đề (0,5) chọn từ một số cặp mẫu, chưa có đáp án đối chiếu để đo độ chính xác và mức bỏ sót. Trên dữ liệu ngày 25/11, view ghép được 3 cặp trên khoảng 240 tin (khoảng 1,3%), cả 3 cặp đã được kiểm tra bằng mắt là cùng một phòng.
 - Airflow dùng tài khoản mặc định cho môi trường phát triển trên máy cá nhân.
 
